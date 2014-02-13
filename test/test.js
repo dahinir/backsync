@@ -325,6 +325,8 @@ describe( "backbone.mongodb", function() {
             new Collection()
                 .once( "sync", function() {
                     assert.equal( this.models.length, 3 );
+
+                    // Note: may sporadically fail due to random sorting
                     assert.deepEqual( this.models[0].toJSON(), models[0].toJSON() );
                     assert.deepEqual( this.models[1].toJSON(), models[1].toJSON() );
                     assert.deepEqual( this.models[2].toJSON(), models[2].toJSON() );
