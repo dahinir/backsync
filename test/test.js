@@ -4,7 +4,7 @@ var async = require( "async" );
 var backsync = require( ".." );
 var backbone = require( "backbone" );
 
-describe( "backsync", function() {
+describe( "backsync.memory", function() {
 
     var datastore = {};
     var Model = backbone.Model.extend({
@@ -157,5 +157,40 @@ describe( "backsync", function() {
                 }).fetch();
         });
     });
+
+
+    it( "filters, sorts, skips and limits a collection of models", function( done ) {
+        var data = [
+            { age: 30, color: "blue" },
+            { age: 2, color: "green" },
+            { age: 15, color: "blue" },
+            { age: 49, color: "blue" },
+            { age: 7, color: "blue" }
+        ];
+
+        var parallels = data.map( function( entry ) {
+            return function( cb ) {
+                new Model( entry ).on( "sync", function() {
+                    cb( null, this )
+                } ).save();
+            }
+        });
+
+        async.parallel( parallels, function( err, models ) {
+            new Collection()
+                .once( "sync", function() {
+                    var ages = this.models.map(function( model ) {
+                        return model.get( "age" );
+                    });
+                    assert.deepEqual( ages, [ 15, 30 ] );
+                    done();
+                }).fetch({ data: {
+                    color: "blue",
+                    $sort: "age",
+                    $skip: 1,
+                    $limit: 2
+                }});
+        })
+    })
 
 });
