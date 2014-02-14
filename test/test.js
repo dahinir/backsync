@@ -1,10 +1,20 @@
 var assert = require( "assert" );
 
-var async = require( "async" );
-var mongodb = require( "mongodb" );
 var backbone = require( "backbone" );
+var mongodb = require( "mongodb" );
+var _ = require( "underscore" );
+var async = require( "async" );
 
 var backsync = require( ".." );
+
+var modelsToObject = function( models ) {
+    return models.reduce(function( memo, model ) {
+        var obj = {}
+        obj[ model.id ] = model.toJSON();
+        _.extend( memo, obj )
+        return memo
+    }, {});
+}
 
 describe( "backsync", function() {
 
@@ -135,7 +145,6 @@ describe( "backsync.memory", function() {
             }).save({ hello: "world" });
     });
 
-
     it( "reads a collection of models", function( done ) {
         var parallels = [ 8, 20, 2 ].map( function( age ) {
             return function( cb ) {
@@ -145,12 +154,10 @@ describe( "backsync.memory", function() {
             }
         })
         async.parallel( parallels, function( err, models ) {
+            models = modelsToObject( models )
             new Collection()
                 .once( "sync", function() {
-                    assert.equal( this.models.length, 3 );
-                    assert.deepEqual( this.models[0].toJSON(), models[0].toJSON() );
-                    assert.deepEqual( this.models[1].toJSON(), models[1].toJSON() );
-                    assert.deepEqual( this.models[2].toJSON(), models[2].toJSON() );
+                    assert.deepEqual( modelsToObject( this.models ), models );
                     done();
                 }).fetch();
         });
@@ -322,14 +329,11 @@ describe( "backbone.mongodb", function() {
             }
         })
         async.parallel( parallels, function( err, models ) {
+            models = modelsToObject( models )
             new Collection()
                 .once( "sync", function() {
                     assert.equal( this.models.length, 3 );
-
-                    // Note: may sporadically fail due to random sorting
-                    assert.deepEqual( this.models[0].toJSON(), models[0].toJSON() );
-                    assert.deepEqual( this.models[1].toJSON(), models[1].toJSON() );
-                    assert.deepEqual( this.models[2].toJSON(), models[2].toJSON() );
+                    assert.deepEqual( modelsToObject( this.models ), models );
                     done();
                 }).fetch();
         });
