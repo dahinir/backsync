@@ -132,6 +132,15 @@ describe( "backsync.memory", function() {
     });
 
 
+    it( "throws error on missing model", function( done ) {
+        new Model({ id: this.id })
+            .once( "error", function( m, err ) {
+                assert( err instanceof backsync.NotFoundError );
+                done();
+            }).fetch();
+    });
+
+
     it( "deletes an existing model", function( done ) {
         new Model()
             .once( "sync", function() {
