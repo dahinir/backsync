@@ -247,7 +247,7 @@ describe( "backbone.mongodb", function() {
             collection.find({}).toArray(function( err, docs ) {
                 assert.equal( docs.length, 1 );
                 assert.equal( docs[ 0 ].hello, "world" );
-                assert.deepEqual( docs[ 0 ]._id, id );
+                assert.deepEqual( docs[ 0 ]._id.toString(), id );
                 done();
             });
         } ).save({ hello: "world" });
@@ -271,6 +271,30 @@ describe( "backbone.mongodb", function() {
                             assert.equal( docs.length, 1 );
                             assert.equal( docs[ 0 ].hello, "world" );
                             assert.equal( docs[ 0 ]._id, "cookie" );
+                            assert.equal( typeof docs[ 0 ].foo, "undefined" );
+                            done();
+                        });
+                    }).save({ "hello": "world" });
+            }).save({ foo: "bar" });
+    });
+
+
+    it( "creates & updates a model", function( done ) {
+        new Model({ name: "cookie" })
+            .once( "sync", function() {
+                assert.equal( this.get( "name" ), "cookie" );
+                assert.equal( this.get( "foo" ), "bar" );
+
+                // now override
+                new Model({ id: this.id.toString() })
+                    .once( "sync", function() {
+                        // assert.equal( this.id, "cookie" );
+                        assert( !this.has( "foo" ) );
+                        assert.equal( this.get( "hello" ), "world" );
+
+                        collection.find({}).toArray(function( err, docs ) {
+                            assert.equal( docs.length, 1 );
+                            assert.equal( docs[ 0 ].hello, "world" );
                             assert.equal( typeof docs[ 0 ].foo, "undefined" );
                             done();
                         });
