@@ -314,6 +314,18 @@ describe( "backbone.mongodb", function() {
     });
 
 
+    it( "fails to read a non-existing model", function( done ) {
+        new Model({ id: this.id })
+            .once( "error", function( m, err ) {
+                assert.equal( err.name, "NotFoundError" );
+                done();
+            })
+            .once( "sync", function() {
+                assert.fail( "loaded", "NotFoundError" );
+            }).fetch();
+    });
+
+
     it( "deletes an existing model", function( done ) {
         new Model()
             .once( "sync", function() {
