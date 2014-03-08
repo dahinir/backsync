@@ -341,6 +341,18 @@ describe( "backbone.mongodb", function() {
     });
 
 
+    it( "fails to delete a non-existing model", function( done ) {
+        new Model({ id: "123" })
+            .once( "error", function( m, err ) {
+                assert.equal( err.name, "NotFoundError" );
+                done();
+            })
+            .once( "sync", function() {
+                assert.fail( "destroyed", "NotFoundError" );
+            }).destroy();
+    });
+
+
     it( "reads a collection of models", function( done ) {
         var parallels = [ 8, 20, 2 ].map( function( age ) {
             return function( cb ) {
