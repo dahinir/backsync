@@ -285,7 +285,7 @@ describe( "backbone.mongodb", function() {
                 assert.equal( this.get( "foo" ), "bar" );
 
                 // now extend
-                new Model({ id: this.id })
+                new Model({ id: this.id.toString() })
                     .once( "sync", function() {
                         assert( this.has( "foo" ) );
                         assert.equal( this.get( "hello" ), "world" );
@@ -305,7 +305,7 @@ describe( "backbone.mongodb", function() {
     it( "reads an existing model", function( done ) {
         new Model()
             .once( "sync", function() {
-                new Model({ id: this.id })
+                new Model({ id: this.id.toString() })
                     .once( "sync", function() {
                         assert.equal( this.get( "hello" ), "world" );
                         done();
@@ -329,8 +329,7 @@ describe( "backbone.mongodb", function() {
     it( "deletes an existing model", function( done ) {
         new Model()
             .once( "sync", function() {
-                var id = this.id;
-                new Model({ id: this.id })
+                new Model({ id: this.id.toString() })
                     .once( "sync", function() {
                         collection.find({}).toArray(function( err, docs ) {
                             assert.equal( docs.length, 0 );
