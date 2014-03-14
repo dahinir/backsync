@@ -238,6 +238,33 @@ describe( "backbone.mongodb", function() {
         sync: backsync.mongodb()
     });
 
+    it( "generates the correct dsn", function( done ) {
+        connect = mongodb.MongoClient.connect
+        mongodb.MongoClient.connect = function( dsn, cb ) {
+            mongodb.MongoClient.connect = connect
+            comps = dsn.split( "/" )
+
+            assert.equal( comps[ 0 ], "mongodb:" ); // protocol
+            assert.equal( comps[ 2 ], "127.0.0.1:27017" ); // host
+            assert.equal( comps[ 3 ], "test_backsyncx" ) // db
+            // assert.equal( comps.length, 4 );
+
+            cb( null, {
+                collection: function( name ) {
+                    assert.equal( name, "one/two/three" )
+                    return { insert: function() {} }
+                }
+            })
+
+            done()
+        }
+
+        new Model().save({ hello: "world" }, {
+            url: "mongodb://127.0.0.1:27017/test_backsyncx/one/two/three",
+            // success: function() {}
+        })
+    });
+
 
     it( "creates a new model", function( done ) {
         new Model().on( "sync", function() {
@@ -339,13 +366,25 @@ describe( "backbone.mongodb", function() {
 
 
     it( "fails to read a non-existing model", function( done ) {
-        new Model({ id: this.id })
+        new Model({ id: 123 })
             .once( "error", function( m, err ) {
                 assert.equal( err.name, "NotFoundError" );
                 done();
             })
             .once( "sync", function() {
                 assert.fail( "loaded", "NotFoundError" );
+            }).fetch();
+    });
+
+
+    it( "fails to read a model without an id", function( done ) {
+        new Model({ id: null })
+            .once( "error", function( m, err ) {
+                assert( err.message.match( /missing or incorrect model id/i ) );
+                done();
+            })
+            .once( "sync", function() {
+                assert.fail( "loaded", "Missing or Incorrect Model ID" );
             }).fetch();
     });
 
