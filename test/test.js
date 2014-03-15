@@ -346,6 +346,10 @@ describe( "backbone.mongodb", function() {
                         assert( !this.has( "foo" ) );
                         assert.equal( this.get( "hello" ), "world" );
 
+                        // not excessive attributes
+                        keys = Object.keys( this.attributes )
+                        assert.deepEqual( keys, [ "id", "hello" ] )
+
                         collection.find({}).toArray(function( err, docs ) {
                             assert.equal( docs.length, 1 );
                             assert.equal( docs[ 0 ].hello, "world" );
