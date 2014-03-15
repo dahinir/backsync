@@ -226,7 +226,7 @@ describe( "backbone.mongodb", function() {
             if ( err && err.toString() != "MongoError: ns not found" ) throw err;
             done();
         });
-    })
+    });
 
     var Collection = backbone.Collection.extend({
         url: "mongodb://127.0.0.1:27017/test_backsyncx/models",
@@ -247,7 +247,7 @@ describe( "backbone.mongodb", function() {
             assert.equal( comps[ 0 ], "mongodb:" ); // protocol
             assert.equal( comps[ 2 ], "127.0.0.1:27017" ); // host
             assert.equal( comps[ 3 ], "test_backsyncx" ) // db
-            // assert.equal( comps.length, 4 );
+            assert.equal( comps.length, 4 );
 
             cb( null, {
                 collection: function( name ) {
@@ -264,6 +264,58 @@ describe( "backbone.mongodb", function() {
             // success: function() {}
         })
     });
+
+
+    it( "converts id to ObjectID", function( done ) {
+        connect = mongodb.MongoClient.connect
+        mongodb.MongoClient.connect = function( dsn, cb ) {
+            mongodb.MongoClient.connect = connect
+            cb( null, {
+                collection: function( name ) {
+                    return {
+                        save: function( doc ) {
+                            assert.equal( doc.hello, "world" );
+                            assert.equal( typeof doc._id, "object" )
+                            assert.equal( doc._id.toString(), "531e096521b5c6670c5e63a3" );
+                            assert( !doc.id );
+                            done();
+                        }
+                    }
+                }
+            });
+        }
+
+        new Model().save({ hello: "world", id: "531e096521b5c6670c5e63a3" }, {})
+    });
+
+
+    it( "generates md5 of uuid", function( done ) {
+        connect = mongodb.MongoClient.connect
+        mongodb.MongoClient.connect = function( dsn, cb ) {
+            mongodb.MongoClient.connect = connect
+            cb( null, {
+                collection: function( name ) {
+
+
+                    return {
+                        insert: function( doc ) {
+                            assert.equal( typeof doc._id, "string" );
+                            assert.equal( doc._id.length, 43 );
+                            assert( !doc.id );
+                            done();
+                        }
+                    }
+                }
+            });
+        }
+
+        var m = new Model();
+        m.sync = backsync.mongodb({ use_uuid: true });
+        m.save({ hello: "world" }, {})
+    });
+
+
+
 
 
     it( "creates a new model", function( done ) {
