@@ -295,12 +295,10 @@ describe( "backbone.mongodb", function() {
             mongodb.MongoClient.connect = connect
             cb( null, {
                 collection: function( name ) {
-
-
                     return {
                         insert: function( doc ) {
                             assert.equal( typeof doc._id, "string" );
-                            assert.equal( doc._id.length, 43 );
+                            assert.equal( doc._id.length, 32 );
                             assert( !doc.id );
                             done();
                         }
