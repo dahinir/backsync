@@ -213,8 +213,8 @@ describe( "backsync.memory", function() {
 describe( "backbone.mongodb", function() {
 
     var collection = null;
+    var dsn = "mongodb://127.0.0.1:27017/test_backsyncx";
     before(function( done ) {
-        var dsn = "mongodb://127.0.0.1:27017/test_backsyncx";
         mongodb.MongoClient.connect( dsn, function( err, db ) {
             collection = db.collection( "models" );
             done();
@@ -289,6 +289,27 @@ describe( "backbone.mongodb", function() {
     });
 
 
+    it( "uses the default dsn", function( done ) {
+        var M = backbone.Model.extend({
+            urlRoot: "/models",
+            sync: backsync.mongodb({ dsn: dsn })
+        });
+
+        new M().save({ hello: "world" }, {
+            success: function( m ) {
+                assert( m.get( "hello" ), "world" );
+                collection.find({}).toArray(function( err, docs ) {
+                    assert.equal( docs.length, 1 );
+                    assert.equal( docs[ 0 ]._id, m.id );
+                    assert.equal( docs[ 0 ].hello, "world" );
+                    done();
+                });
+            }
+        });
+
+    });
+
+
     it( "generates md5 of uuid", function( done ) {
         connect = mongodb.MongoClient.connect
         mongodb.MongoClient.connect = function( dsn, cb ) {
@@ -311,9 +332,6 @@ describe( "backbone.mongodb", function() {
         m.sync = backsync.mongodb({ use_uuid: true });
         m.save({ hello: "world" }, {})
     });
-
-
-
 
 
     it( "creates a new model", function( done ) {
