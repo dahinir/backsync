@@ -336,6 +336,40 @@ describe( "backsync.couchdb", function() {
     });
 
 
+    it( "filters, sorts, skips and limits a collection of models", function( done ) {
+        var data = [
+            { age: 30, color: "blue" },
+            { age: 2, color: "green" },
+            { age: 15, color: "blue" },
+            { age: 49, color: "blue" },
+            { age: 7, color: "blue" }
+        ];
+
+        var parallels = data.map( function( entry ) {
+            return function( cb ) {
+                new Model( entry ).on( "sync", function() {
+                    cb( null, this )
+                } ).save( null, { create_db: true, error: function(m, e) { console.log( e )} });
+            }
+        });
+
+        async.series( parallels, function( err, models ) {
+            new Collection().once( "sync", function() {
+                var ages = this.models.map(function( model ) {
+                    return model.get( "age" );
+                });
+                assert.deepEqual( ages, [ 15, 30 ] );
+                done();
+            }).fetch({ data: {
+                color: "blue",
+                $sort: "age",
+                $skip: 1,
+                $limit: 2
+            }});
+        });
+    });
+
+
 });
 
 
