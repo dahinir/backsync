@@ -2,6 +2,7 @@ var assert = require( "assert" );
 
 var backbone = require( "backbone" );
 var mongodb = require( "mongodb" );
+var request = require( "request" );
 var _ = require( "underscore" );
 var async = require( "async" );
 
@@ -210,7 +211,135 @@ describe( "backsync.memory", function() {
 });
 
 
-describe( "backbone.mongodb", function() {
+describe( "backsync.couchdb", function() {
+
+    var Model = backbone.Model.extend({
+        urlRoot: "http://127.0.0.1:5984/test_backsyncx",
+        sync: backsync.couchdb()
+    });
+
+    var Collection = backbone.Collection.extend({
+        model: Model,
+        url: Model.prototype.urlRoot,
+        sync: Model.prototype.sync
+    });
+
+    beforeEach(function( done ) {
+        request( { url: Model.prototype.urlRoot, method: "DELETE" }, done )
+    });
+
+    it( "creates a new model", function( done ) {
+        new Model().once( "sync", function() {
+            var id = this.id;
+            assert( id ); // id was automaticaly created
+            assert.equal( this.get( "hello" ), "world" );
+            var rev = this.get( "rev" );
+            assert( rev );
+
+            new Model({ id: this.id }).once( "sync", function() {
+                assert.equal( this.id, id );
+                assert.equal( this.get( "rev" ), rev );
+                assert.equal( this.get( "hello" ), "world" );
+                done();
+            }).fetch();
+
+        } ).save({ hello: "world" }, { create_db: true });
+    });
+
+
+    it( "updates an existing model", function( done ) {
+        new Model({ id: "cookie" })
+            .once( "sync", function() {
+                assert.equal( this.id, "cookie" );
+                assert.equal( this.get( "foo" ), "bar" );
+
+                var rev = this.get( "rev" );
+                assert( rev );
+
+                this.once( "sync", function() {
+                    assert.notEqual( this.get( "rev" ), rev );
+                    assert.equal( this.get( "hello" ), "world" );
+                    assert.equal( this.get( "foo" ), "bar" );
+                    done();
+                }).save({ "hello": "world" });
+
+            }).save({ foo: "bar" }, { create_db: true });
+
+    });
+
+
+    it( "patches an existing model", function( done ) {
+        new Model().once( "sync", function() {
+            new Model({ id: this.id }).once( "sync", function() {
+                assert( this.id );
+                assert.equal( this.get( "foo" ), "bar" );
+                assert.equal( this.get( "hello" ), "world" );
+                done();
+            }).save({ hello: "world" }, { patch: true } )
+        }).save({ foo: "bar" }, { create_db: true });
+    });
+
+
+    it( "fails to read a non-existing model", function( done ) {
+        new Model({ id: 123 }).once( "error", function( m, err ) {
+            assert.equal( err.name, "NotFoundError" );
+            done();
+        }).once( "sync", function() {
+            assert.fail( "loaded", "NotFoundError" );
+        }).fetch();
+    });
+
+
+    it( "fails to read a model without an id", function( done ) {
+        new Model({ id: null }).once( "error", function( m, err ) {
+            assert( err.message.match( /missing or incorrect model id/i ) );
+            done();
+        }).once( "sync", function() {
+            assert.fail( "loaded", "Missing or Incorrect Model ID" );
+        }).fetch();
+    });
+
+
+    it( "deletes an existing model", function( done ) {
+        new Model().once( "sync", function() {
+            new Model({ id: this.id }).once( "sync", function() {
+                assert.equal( this.get( "hello" ), "world" )
+                this.once( "sync", function() {
+                    new Model({ id: this.id }).once( "error", function( m, err ) {
+                        assert( err );
+                        assert.equal( err.name, "NotFoundError" );
+                        done();
+                    }).fetch();
+                }).destroy();
+            }).fetch();
+        }).save({ hello: "world" }, { create_db: true } );
+    });
+
+
+    it( "reads a collection of models", function( done ) {
+        var parallels = [ 8, 20, 2 ].map( function( age ) {
+            return function( cb ) {
+                new Model({ age: age }).on( "sync", function() {
+                    cb( null, this );
+                }).save({}, { create_db: true, error: function() { console.log( arguments )} });
+            }
+        });
+
+        async.parallel( parallels, function( err, models ) {
+            models = modelsToObject( models )
+            new Collection().once( "sync", function() {
+                assert.equal( this.models.length, 3 );
+                assert.deepEqual( modelsToObject( this.models ), models );
+                done();
+            }).fetch();
+        });
+    });
+
+
+});
+
+
+describe( "backsync.mongodb", function() {
 
     var collection = null;
     var dsn = "mongodb://127.0.0.1:27017/test_backsyncx";
@@ -472,18 +601,6 @@ describe( "backbone.mongodb", function() {
                         });
                     }).destroy();
             }).save({ hello: "world" });
-    });
-
-
-    it( "fails to delete a non-existing model", function( done ) {
-        new Model({ id: "123" })
-            .once( "error", function( m, err ) {
-                assert.equal( err.name, "NotFoundError" );
-                done();
-            })
-            .once( "sync", function() {
-                assert.fail( "destroyed", "NotFoundError" );
-            }).destroy();
     });
 
 
