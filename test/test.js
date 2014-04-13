@@ -15,11 +15,91 @@ var modelsToObject = function( models ) {
         _.extend( memo, obj )
         return memo
     }, {});
+};
+
+var test_collection = function( Collection, done ) {
+    var Model = Collection.prototype.model;
+    var data = [
+        { age: 30, color: "blue" },
+        { age: 2, color: "green" },
+        { age: 15, color: "blue" },
+        { age: 49, color: "blue" },
+        { age: 7, color: "blue" }
+    ];
+
+    var save_multi = data.map( function( datum ) {
+        return function( cb ) {
+            new Model().save( datum, {
+                success: function( m ) { cb( null, m ) }
+            });
+        }
+    })
+
+    async.series( save_multi, function( err, models ) {
+        new Collection().fetch({
+            data: {
+                color: "blue",
+                $sort: "age",
+                $skip: 1,
+                $limit: 2
+            }, success: function( c ) {
+                var ages = c.map( function( m ) { return m.get( "age" ) });
+                assert.deepEqual( ages, [ 15, 30 ] );
+                done();
+            }
+        })
+    });
+};
+
+var test_model = function( Model, done ) {
+    async.waterfall([
+        function( cb ) { // create
+            new Model().save( { hello: "world" }, {
+                success: function( m ) { cb( null, m ) }
+            });
+        },
+        function( m, cb ) { // update
+            m.save( { foo: "bar" }, {
+                success: function( m ) { cb( null, m ) }
+            });
+        },
+        function( m, cb ) { // patch
+            new Model({ id: m.id }).save( { alice: "bob" }, {
+                patch: true,
+                success: function( m ) { cb( null, m ) }
+            });
+        },
+        function( m, cb ) { // read
+            new Model({ id: m.id }).fetch({
+                success: function( m ) {
+                    assert( m.id );
+                    assert.equal( typeof m._id, "undefined" );
+                    assert.equal( m.get( "hello" ), "world" );
+                    assert.equal( m.get( "foo" ), "bar" );
+                    assert.equal( m.get( "alice" ), "bob" );
+                    cb( null, m )
+                }
+            });
+        },
+        function( m, cb ) { // delete
+            m.destroy({
+                success: function( m ) { cb( null, m ); }
+            });
+        },
+        function( m, cb ) { // confirm it's deleted
+            new Model({ id: m.id }).fetch({
+                error: function( m, err ) {
+                    assert.equal( err.name, "NotFoundError" );
+                    cb();
+                }
+            });
+        }
+    ], done )
 }
 
 describe( "backsync", function() {
 
-    it( "throws an error if the backsync method isn't implemented", function() {
+    it( "fails if the backsync method isn't implemented", function() {
         var Model = backbone.Model.extend({
             urlRoot: "/fairy",
             sync: backsync()
@@ -31,7 +111,7 @@ describe( "backsync", function() {
     });
 
 
-    it( "throws an error if no url is specified", function() {
+    it( "fails if no url is specified", function() {
         var Model = backbone.Model.extend({
             url: null,
             sync: backsync()
@@ -40,6 +120,21 @@ describe( "backsync", function() {
         assert.throws( function() {
             new Model().save();
         });
+    });
+
+
+    it( "fails to read a model without an id", function( done ) {
+        var Model = backbone.Model.extend({
+            urlRoot: "/test",
+            sync: backsync()
+        });
+
+        new Model({ id: null }).once( "error", function( m, err ) {
+            assert( err.message.match( /missing or incorrect model id/i ) );
+            done();
+        }).once( "sync", function() {
+            assert.fail( "loaded", "Missing or Incorrect Model ID" );
+        }).fetch();
     });
 
 
@@ -54,7 +149,8 @@ describe( "backsync.memory", function() {
     });
 
     var Collection = backbone.Collection.extend({
-        url: "/somethings",
+        model: Model,
+        url: Model.prototype.urlRoot,
         sync: backsync.memory( datastore )
     });
 
@@ -64,148 +160,12 @@ describe( "backsync.memory", function() {
         }
     });
 
-
-    it( "creates a new model", function( done ) {
-        new Model().on( "sync", function() {
-            assert( this.id ); // id was automaticaly created
-            var data = datastore[ "/somethings" ][ this.id ];
-            assert.deepEqual( this.attributes, data );
-            assert.equal( this.get( "hello" ), "world" );
-            done()
-        } ).save({ hello: "world" });
+    it( "implements the middleware CRUD API", function( done ) {
+        test_model( Model, done )
     });
 
-
-    it( "updates an existing model", function( done ) {
-        new Model({ id: "cookie" })
-            .once( "sync", function() {
-                assert.equal( this.id, "cookie" );
-                var data = datastore[ "/somethings" ][ this.id ];
-                assert.deepEqual( this.attributes, data );
-                assert.equal( this.get( "foo" ), "bar" );
-
-                // now override
-                new Model({ id: "cookie" })
-                    .once( "sync", function() {
-                        assert.equal( this.id, "cookie" );
-                        var data = datastore[ "/somethings" ][ this.id ];
-                        assert.deepEqual( this.attributes, data );
-                        assert( !this.has( "foo" ) );
-                        assert.equal( this.get( "hello" ), "world" );
-                        done();
-                    }).save({ "hello": "world" });
-            }).save({ foo: "bar" });
-    });
-
-
-    it( "patches an existing model", function( done ) {
-        new Model()
-            .once( "sync", function() {
-                var data = datastore[ "/somethings" ][ this.id ];
-                assert.deepEqual( this.attributes, data );
-                assert.equal( this.get( "foo" ), "bar" );
-
-                // now extend
-                new Model({ id: this.id })
-                    .once( "sync", function() {
-                        var data = datastore[ "/somethings" ][ this.id ];
-                        assert.deepEqual( this.attributes, data );
-                        assert( this.has( "foo" ) );
-                        assert.equal( this.get( "hello" ), "world" );
-                        assert.equal( this.get( "foo" ), "bar" );
-                        done();
-                    }).save({ "hello": "world" }, { patch: true });
-            }).save({ foo: "bar" });
-    });
-
-
-    it( "reads an existing model", function( done ) {
-        new Model()
-            .once( "sync", function() {
-                new Model({ id: this.id })
-                    .once( "sync", function() {
-                        var data = datastore[ "/somethings" ][ this.id ];
-                        assert.deepEqual( this.attributes, data );
-                        assert.equal( this.get( "hello" ), "world" );
-                        done();
-                    }).fetch();
-            }).save({ hello: "world" });
-    });
-
-
-    it( "throws error on missing model", function( done ) {
-        new Model({ id: this.id })
-            .once( "error", function( m, err ) {
-                assert( err instanceof backsync.NotFoundError );
-                done();
-            }).fetch();
-    });
-
-
-    it( "deletes an existing model", function( done ) {
-        new Model()
-            .once( "sync", function() {
-                var id = this.id;
-                assert( datastore[ "/somethings" ][ id ] );
-                new Model({ id: this.id })
-                    .once( "sync", function() {
-                        assert( !datastore[ "/somethings" ][ id ] );
-                        done();
-                    }).destroy();
-            }).save({ hello: "world" });
-    });
-
-    it( "reads a collection of models", function( done ) {
-        var parallels = [ 8, 20, 2 ].map( function( age ) {
-            return function( cb ) {
-                new Model({ age: age }).on( "sync", function() {
-                    cb( null, this );
-                }).save();
-            }
-        })
-        async.parallel( parallels, function( err, models ) {
-            models = modelsToObject( models )
-            new Collection()
-                .once( "sync", function() {
-                    assert.deepEqual( modelsToObject( this.models ), models );
-                    done();
-                }).fetch();
-        });
-    });
-
-
-    it( "filters, sorts, skips and limits a collection of models", function( done ) {
-        var data = [
-            { age: 30, color: "blue" },
-            { age: 2, color: "green" },
-            { age: 15, color: "blue" },
-            { age: 49, color: "blue" },
-            { age: 7, color: "blue" }
-        ];
-
-        var parallels = data.map( function( entry ) {
-            return function( cb ) {
-                new Model( entry ).on( "sync", function() {
-                    cb( null, this )
-                } ).save();
-            }
-        });
-
-        async.parallel( parallels, function( err, models ) {
-            new Collection()
-                .once( "sync", function() {
-                    var ages = this.models.map(function( model ) {
-                        return model.get( "age" );
-                    });
-                    assert.deepEqual( ages, [ 15, 30 ] );
-                    done();
-                }).fetch({ data: {
-                    color: "blue",
-                    $sort: "age",
-                    $skip: 1,
-                    $limit: 2
-                }});
-        })
+    it( "implements the collection search", function( done ) {
+        test_collection( Collection, done );
     });
 
 });
@@ -215,7 +175,7 @@ describe( "backsync.couchdb", function() {
 
     var Model = backbone.Model.extend({
         urlRoot: "http://127.0.0.1:5984/test_backsyncx",
-        sync: backsync.couchdb()
+        sync: backsync.couchdb({ create_db: true })
     });
 
     var Collection = backbone.Collection.extend({
@@ -228,147 +188,13 @@ describe( "backsync.couchdb", function() {
         request( { url: Model.prototype.urlRoot, method: "DELETE" }, done )
     });
 
-    it( "creates a new model", function( done ) {
-        new Model().once( "sync", function() {
-            var id = this.id;
-            assert( id ); // id was automaticaly created
-            assert.equal( this.get( "hello" ), "world" );
-            var rev = this.get( "rev" );
-            assert( rev );
-
-            new Model({ id: this.id }).once( "sync", function() {
-                assert.equal( this.id, id );
-                assert.equal( this.get( "rev" ), rev );
-                assert.equal( this.get( "hello" ), "world" );
-                done();
-            }).fetch();
-
-        } ).save({ hello: "world" }, { create_db: true });
+    it( "implements the model CRUD API", function( done ) {
+        test_model( Model, done )
     });
 
-
-    it( "updates an existing model", function( done ) {
-        new Model({ id: "cookie" })
-            .once( "sync", function() {
-                assert.equal( this.id, "cookie" );
-                assert.equal( this.get( "foo" ), "bar" );
-
-                var rev = this.get( "rev" );
-                assert( rev );
-
-                this.once( "sync", function() {
-                    assert.notEqual( this.get( "rev" ), rev );
-                    assert.equal( this.get( "hello" ), "world" );
-                    assert.equal( this.get( "foo" ), "bar" );
-                    done();
-                }).save({ "hello": "world" });
-
-            }).save({ foo: "bar" }, { create_db: true });
-
+    it( "implements the collection search", function( done ) {
+        test_collection( Collection, done );
     });
-
-
-    it( "patches an existing model", function( done ) {
-        new Model().once( "sync", function() {
-            new Model({ id: this.id }).once( "sync", function() {
-                assert( this.id );
-                assert.equal( this.get( "foo" ), "bar" );
-                assert.equal( this.get( "hello" ), "world" );
-                done();
-            }).save({ hello: "world" }, { patch: true } )
-        }).save({ foo: "bar" }, { create_db: true });
-    });
-
-
-    it( "fails to read a non-existing model", function( done ) {
-        new Model({ id: 123 }).once( "error", function( m, err ) {
-            assert.equal( err.name, "NotFoundError" );
-            done();
-        }).once( "sync", function() {
-            assert.fail( "loaded", "NotFoundError" );
-        }).fetch();
-    });
-
-
-    it( "fails to read a model without an id", function( done ) {
-        new Model({ id: null }).once( "error", function( m, err ) {
-            assert( err.message.match( /missing or incorrect model id/i ) );
-            done();
-        }).once( "sync", function() {
-            assert.fail( "loaded", "Missing or Incorrect Model ID" );
-        }).fetch();
-    });
-
-
-    it( "deletes an existing model", function( done ) {
-        new Model().once( "sync", function() {
-            new Model({ id: this.id }).once( "sync", function() {
-                assert.equal( this.get( "hello" ), "world" )
-                this.once( "sync", function() {
-                    new Model({ id: this.id }).once( "error", function( m, err ) {
-                        assert( err );
-                        assert.equal( err.name, "NotFoundError" );
-                        done();
-                    }).fetch();
-                }).destroy();
-            }).fetch();
-        }).save({ hello: "world" }, { create_db: true } );
-    });
-
-
-    it( "reads a collection of models", function( done ) {
-        var parallels = [ 8, 20, 2 ].map( function( age ) {
-            return function( cb ) {
-                new Model({ age: age }).on( "sync", function() {
-                    cb( null, this );
-                }).save({}, { create_db: true, error: function() { console.log( arguments )} });
-            }
-        });
-
-        async.parallel( parallels, function( err, models ) {
-            models = modelsToObject( models )
-            new Collection().once( "sync", function() {
-                assert.equal( this.models.length, 3 );
-                assert.deepEqual( modelsToObject( this.models ), models );
-                done();
-            }).fetch();
-        });
-    });
-
-
-    it( "filters, sorts, skips and limits a collection of models", function( done ) {
-        var data = [
-            { age: 30, color: "blue" },
-            { age: 2, color: "green" },
-            { age: 15, color: "blue" },
-            { age: 49, color: "blue" },
-            { age: 7, color: "blue" }
-        ];
-
-        var parallels = data.map( function( entry ) {
-            return function( cb ) {
-                new Model( entry ).on( "sync", function() {
-                    cb( null, this )
-                } ).save( null, { create_db: true, error: function(m, e) { console.log( e )} });
-            }
-        });
-
-        async.series( parallels, function( err, models ) {
-            new Collection().once( "sync", function() {
-                var ages = this.models.map(function( model ) {
-                    return model.get( "age" );
-                });
-                assert.deepEqual( ages, [ 15, 30 ] );
-                done();
-            }).fetch({ data: {
-                color: "blue",
-                $sort: "age",
-                $skip: 1,
-                $limit: 2
-            }});
-        });
-    });
-
 
 });
 
@@ -391,14 +217,23 @@ describe( "backsync.mongodb", function() {
         });
     });
 
-    var Collection = backbone.Collection.extend({
-        url: "mongodb://127.0.0.1:27017/test_backsyncx/models",
+    var Model = backbone.Model.extend({
+        urlRoot: "mongodb://127.0.0.1:27017/test_backsyncx/models",
         sync: backsync.mongodb()
     });
 
-    var Model = backbone.Model.extend({
-        urlRoot: Collection.prototype.url,
+    var Collection = backbone.Collection.extend({
+        model: Model,
+        url: Model.prototype.urlRoot,
         sync: backsync.mongodb()
+    });
+
+    it( "implements the middleware CRUD API", function( done ) {
+        test_model( Model, done )
+    });
+
+    it( "implements the collection search", function( done ) {
+        test_collection( Collection, done );
     });
 
     it( "generates the correct dsn", function( done ) {
@@ -496,199 +331,4 @@ describe( "backsync.mongodb", function() {
         m.save({ hello: "world" }, {})
     });
 
-
-    it( "creates a new model", function( done ) {
-        new Model().on( "sync", function() {
-            var id = this.id;
-            assert( id ); // id was automaticaly created
-            assert.equal( this.get( "hello" ), "world" );
-            collection.find({}).toArray(function( err, docs ) {
-                assert.equal( docs.length, 1 );
-                assert.equal( docs[ 0 ].hello, "world" );
-                assert.deepEqual( docs[ 0 ]._id.toString(), id );
-                done();
-            });
-        } ).save({ hello: "world" });
-    });
-
-
-    it( "updates an existing model", function( done ) {
-        new Model({ id: "cookie" })
-            .once( "sync", function() {
-                assert.equal( this.id, "cookie" );
-                assert.equal( this.get( "foo" ), "bar" );
-
-                // now override
-                new Model({ id: "cookie" })
-                    .once( "sync", function() {
-                        assert.equal( this.id, "cookie" );
-                        assert( !this.has( "foo" ) );
-                        assert.equal( this.get( "hello" ), "world" );
-
-                        // not excessive attributes
-                        keys = Object.keys( this.attributes )
-                        assert.deepEqual( keys, [ "id", "hello" ] )
-
-                        collection.find({}).toArray(function( err, docs ) {
-                            assert.equal( docs.length, 1 );
-                            assert.equal( docs[ 0 ].hello, "world" );
-                            assert.equal( docs[ 0 ]._id, "cookie" );
-                            assert.equal( typeof docs[ 0 ].foo, "undefined" );
-                            done();
-                        });
-                    }).save({ "hello": "world" });
-            }).save({ foo: "bar" });
-    });
-
-
-    it( "creates & updates a model", function( done ) {
-        new Model({ name: "cookie" })
-            .once( "sync", function() {
-                assert.equal( this.get( "name" ), "cookie" );
-                assert.equal( this.get( "foo" ), "bar" );
-
-                // now override
-                new Model({ id: this.id.toString() })
-                    .once( "sync", function() {
-                        // assert.equal( this.id, "cookie" );
-                        assert( !this.has( "foo" ) );
-                        assert.equal( this.get( "hello" ), "world" );
-
-                        collection.find({}).toArray(function( err, docs ) {
-                            assert.equal( docs.length, 1 );
-                            assert.equal( docs[ 0 ].hello, "world" );
-                            assert.equal( typeof docs[ 0 ].foo, "undefined" );
-                            done();
-                        });
-                    }).save({ "hello": "world" });
-            }).save({ foo: "bar" });
-    });
-
-
-    it( "patches an existing model", function( done ) {
-        new Model()
-            .once( "sync", function() {
-                assert.equal( this.get( "foo" ), "bar" );
-
-                // now extend
-                new Model({ id: this.id.toString() })
-                    .once( "sync", function() {
-                        assert( this.has( "foo" ) );
-                        assert.equal( this.get( "hello" ), "world" );
-                        assert.equal( this.get( "foo" ), "bar" );
-
-                        collection.find({}).toArray(function( err, docs ) {
-                            assert.equal( docs.length, 1 );
-                            assert.equal( docs[ 0 ].hello, "world" );
-                            assert.equal( docs[ 0 ].foo, "bar" );
-                            done();
-                        });
-                    }).save({ "hello": "world" }, { patch: true });
-            }).save({ foo: "bar" });
-    });
-
-
-    it( "reads an existing model", function( done ) {
-        new Model()
-            .once( "sync", function() {
-                new Model({ id: this.id.toString() })
-                    .once( "sync", function() {
-                        assert.equal( this.get( "hello" ), "world" );
-                        done();
-                    }).fetch();
-            }).save({ hello: "world" });
-    });
-
-
-    it( "fails to read a non-existing model", function( done ) {
-        new Model({ id: 123 })
-            .once( "error", function( m, err ) {
-                assert.equal( err.name, "NotFoundError" );
-                done();
-            })
-            .once( "sync", function() {
-                assert.fail( "loaded", "NotFoundError" );
-            }).fetch();
-    });
-
-
-    it( "fails to read a model without an id", function( done ) {
-        new Model({ id: null })
-            .once( "error", function( m, err ) {
-                assert( err.message.match( /missing or incorrect model id/i ) );
-                done();
-            })
-            .once( "sync", function() {
-                assert.fail( "loaded", "Missing or Incorrect Model ID" );
-            }).fetch();
-    });
-
-
-    it( "deletes an existing model", function( done ) {
-        new Model()
-            .once( "sync", function() {
-                new Model({ id: this.id.toString() })
-                    .once( "sync", function() {
-                        collection.find({}).toArray(function( err, docs ) {
-                            assert.equal( docs.length, 0 );
-                            done();
-                        });
-                    }).destroy();
-            }).save({ hello: "world" });
-    });
-
-
-    it( "reads a collection of models", function( done ) {
-        var parallels = [ 8, 20, 2 ].map( function( age ) {
-            return function( cb ) {
-                new Model({ age: age }).on( "sync", function() {
-                    cb( null, this );
-                }).save();
-            }
-        })
-        async.parallel( parallels, function( err, models ) {
-            models = modelsToObject( models )
-            new Collection()
-                .once( "sync", function() {
-                    assert.equal( this.models.length, 3 );
-                    assert.deepEqual( modelsToObject( this.models ), models );
-                    done();
-                }).fetch();
-        });
-    });
-
-
-    it( "filters, sorts, skips and limits a collection of models", function( done ) {
-        var data = [
-            { age: 30, color: "blue" },
-            { age: 2, color: "green" },
-            { age: 15, color: "blue" },
-            { age: 49, color: "blue" },
-            { age: 7, color: "blue" }
-        ];
-
-        var parallels = data.map( function( entry ) {
-            return function( cb ) {
-                new Model( entry ).on( "sync", function() {
-                    cb( null, this )
-                } ).save();
-            }
-        });
-
-        async.parallel( parallels, function( err, models ) {
-            new Collection()
-                .once( "sync", function() {
-                    var ages = this.models.map(function( model ) {
-                        return model.get( "age" );
-                    });
-                    assert.deepEqual( ages, [ 15, 30 ] );
-                    done();
-                }).fetch({ data: {
-                    color: "blue",
-                    $sort: "age",
-                    $skip: 1,
-                    $limit: 2
-                }});
-        })
-    })
 });
