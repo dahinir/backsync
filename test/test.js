@@ -1,12 +1,19 @@
+var url = require( "url" );
 var assert = require( "assert" );
+var crypto = require( "crypto" );
+var querystring = require( "querystring" );
 
 var backbone = require( "backbone" );
 var mongodb = require( "mongodb" );
-var request = require( "request" );
+var uuid = require( "node-uuid" );
 var _ = require( "underscore" );
 var async = require( "async" );
 
 var backsync = require( ".." );
+
+var md5 = function( str ) {
+    return crypto.createHash( "md5" ).update( str ).digest( "hex" );
+}
 
 var modelsToObject = function( models ) {
     return models.reduce(function( memo, model ) {
@@ -173,19 +180,63 @@ describe( "backsync.memory", function() {
 
 describe( "backsync.couchdb", function() {
 
+    var d = {};
+    var mock_request = function( opts, cb ) {
+        var _url = url.parse( opts.url );
+        var qs = querystring.parse( _url.query )
+        _url = _url.pathname;
+
+        var res = null;
+        if ( opts.method == "PUT" ) {
+            if ( d[ _url ] && d[ _url ].rev != qs.rev ) {
+                res = { "error": "conflict" }
+            } else {
+                d[ _url ] = {
+                    doc: JSON.parse( opts.body ),
+                    rev: md5( uuid.v4() ),
+                    id: _url.split( "/" ).pop()
+                };
+                res = { ok: "true", id: d[ _url ].id, rev: d[ _url ].rev };
+            }
+        } else if ( opts.method == "GET" || !opts.method ) {
+            if ( _url.indexOf( "_all_docs" ) != -1 ) {
+                res = {
+                    rows: _.map( d, function( v ) {
+                        v = _.clone( v );
+                        v.value = { rev: v.rev };
+                        delete v.rev;
+                        if ( !qs.include_docs ) { delete v.doc }
+                        return v
+                    })
+                }
+            } else if ( !d[ _url ] ) {
+                res = { error: "not_found" };
+            } else {
+                res = _.clone( d[ _url ].doc );
+                res._rev = d[ _url ].rev;
+                res._id = d[ _url ].id;
+            }
+        } else if ( opts.method == "DELETE" ) {
+            if ( !d[ _url ] ) {
+                res = { error: "not_found" };
+            } else {
+                delete d[ _url ];
+                res = { ok: "true" };
+            }
+        }
+
+        process.nextTick(function() { cb( null, {}, JSON.stringify( res ) ) });
+    }
+
     var Model = backbone.Model.extend({
         urlRoot: "http://127.0.0.1:5984/test_backsyncx",
-        sync: backsync.couchdb({ create_db: true })
+        sync: backsync.couchdb({ create_db: true, request: mock_request })
     });
 
     var Collection = backbone.Collection.extend({
         model: Model,
         url: Model.prototype.urlRoot,
         sync: Model.prototype.sync
-    });
-
-    beforeEach(function( done ) {
-        request( { url: Model.prototype.urlRoot, method: "DELETE" }, done )
     });
 
     it( "implements the model CRUD API", function( done ) {
