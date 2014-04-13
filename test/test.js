@@ -8,6 +8,7 @@ var mongodb = require( "mongodb" );
 var uuid = require( "node-uuid" );
 var _ = require( "underscore" );
 var async = require( "async" );
+var sift = require( "sift" );
 
 var backsync = require( ".." );
 
@@ -252,31 +253,85 @@ describe( "backsync.couchdb", function() {
 
 describe( "backsync.mongodb", function() {
 
-    var collection = null;
     var dsn = "mongodb://127.0.0.1:27017/test_backsyncx";
-    before(function( done ) {
-        mongodb.MongoClient.connect( dsn, function( err, db ) {
-            collection = db.collection( "models" );
-            done();
-        } )
-    })
-
-    beforeEach(function( done ) {
-        collection.drop( function( err ) {
-            if ( err && err.toString() != "MongoError: ns not found" ) throw err;
-            done();
-        });
+    beforeEach(function() {
+        mock_client._dbs = {};
     });
+
+    var mock_collection = function() {
+        _data = {};
+        return {
+            insert: function( doc, cb ) {
+                if ( !doc._id ) { doc._id = md5( uuid.v4() ) }
+                _data[ doc._id ] = _.clone( doc );
+                var res = _.clone( _data[ doc._id ] );
+                process.nextTick( function() { cb( null, [ res ] ) } );
+            },
+            save: function( doc, cb ) {
+                this.insert.apply( this, arguments );
+            },
+            findAndModify: function( spec, sort, doc, opts, cb ) {
+                _.extend( _data[ spec._id ], doc.$set );
+                var res = _.clone( _data[ spec._id ] );
+                process.nextTick( function() { cb( null, res ) } );
+            },
+            findOne: function( spec, cb ) {
+                var res = _.clone( _data[ spec._id ] );
+                process.nextTick( function() { cb( null, res ) } );
+            },
+            remove: function( spec, cb ) {
+                var res = 0;
+                if ( _data[ spec._id ] ) {
+                    res = 1;
+                    delete _data[ spec._id ];
+                }
+                process.nextTick( function() { cb( null, res ) } );
+            },
+            find: function( spec ) {
+                spec || ( spec = {} );
+                var sort = null, limit = null, skip = null;
+                return {
+                    sort: function( s ) { sort = s },
+                    limit: function( l ) { limit = l },
+                    skip: function( s ) { skip = s },
+                    toArray: function( cb ) {
+                        var res = sift( spec, _.values( _data ) );
+                        if ( sort ) { res = _.sortBy( res, sort ) }
+                        if ( skip ) { res.splice( 0, skip ) }
+                        if ( limit ) { res.splice( limit ) }
+                        res = res.map(function( m ) { return _.clone( m ) });
+                        process.nextTick( function() { cb( null, res ) } );
+                    }
+                }
+            }
+        };
+    }
+    var mock_client = {
+        _dbs: {},
+        connect: function( dsn, cb ) {
+            if ( !this._dbs[ dsn ] ) { this._dbs[ dsn ] = {} }
+            var collections = this._dbs[ dsn ];
+            cb( null, {
+                collection: function( name ) {
+                    if ( !collections[ name ] ) {
+                        collections[ name ] = mock_collection()
+                    }
+                    return collections[ name ];
+                }
+            });
+        }
+    };
+
 
     var Model = backbone.Model.extend({
         urlRoot: "mongodb://127.0.0.1:27017/test_backsyncx/models",
-        sync: backsync.mongodb()
+        sync: backsync.mongodb({ mongo_client: mock_client })
     });
 
     var Collection = backbone.Collection.extend({
         model: Model,
         url: Model.prototype.urlRoot,
-        sync: backsync.mongodb()
+        sync: Model.prototype.sync
     });
 
     it( "implements the middleware CRUD API", function( done ) {
@@ -288,66 +343,71 @@ describe( "backsync.mongodb", function() {
     });
 
     it( "generates the correct dsn", function( done ) {
-        connect = mongodb.MongoClient.connect
-        mongodb.MongoClient.connect = function( dsn, cb ) {
-            mongodb.MongoClient.connect = connect
-            comps = dsn.split( "/" )
+        var mock_clientx = {
+            connect: function( dsn, cb ) {
+                comps = dsn.split( "/" )
 
-            assert.equal( comps[ 0 ], "mongodb:" ); // protocol
-            assert.equal( comps[ 2 ], "127.0.0.1:27017" ); // host
-            assert.equal( comps[ 3 ], "test_backsyncx" ) // db
-            assert.equal( comps.length, 4 );
+                assert.equal( comps[ 0 ], "mongodb:" ); // protocol
+                assert.equal( comps[ 2 ], "127.0.0.1:27017" ); // host
+                assert.equal( comps[ 3 ], "test_backsyncx" ) // db
+                assert.equal( comps.length, 4 );
 
-            cb( null, {
-                collection: function( name ) {
-                    assert.equal( name, "one/two/three" )
-                    return { insert: function() {} }
-                }
-            })
+                cb( null, {
+                    collection: function( name ) {
+                        assert.equal( name, "one/two/three" )
+                        return { insert: function() {} }
+                    }
+                })
 
-            done()
-        }
+                done()
+            }
+        };
 
-        new Model().save({ hello: "world" }, {
-            url: "mongodb://127.0.0.1:27017/test_backsyncx/one/two/three",
-            // success: function() {}
+        var M = new Model();
+        M.sync = backsync.mongodb({ mongo_client: mock_clientx })
+        M.save({ hello: "world" }, {
+            url: "mongodb://127.0.0.1:27017/test_backsyncx/one/two/three"
         })
     });
 
 
     it( "converts id to ObjectID", function( done ) {
-        connect = mongodb.MongoClient.connect
-        mongodb.MongoClient.connect = function( dsn, cb ) {
-            mongodb.MongoClient.connect = connect
-            cb( null, {
-                collection: function( name ) {
-                    return {
-                        save: function( doc ) {
-                            assert.equal( doc.hello, "world" );
-                            assert.equal( typeof doc._id, "object" )
-                            assert.equal( doc._id.toString(), "531e096521b5c6670c5e63a3" );
-                            assert( !doc.id );
-                            done();
+        var mock_clientx = {
+            connect: function( dsn, cb ) {
+                cb( null, {
+                    collection: function( name ) {
+                        return {
+                            save: function( doc ) {
+                                assert.equal( doc.hello, "world" );
+                                assert.equal( typeof doc._id, "object" )
+                                assert.equal( doc._id.toString(), "531e096521b5c6670c5e63a3" );
+                                assert( !doc.id );
+                                done();
+                            }
                         }
                     }
-                }
-            });
-        }
+                });
+            }
+        };
 
-        new Model().save({ hello: "world", id: "531e096521b5c6670c5e63a3" }, {})
+        var M = new Model();
+        M.sync = backsync.mongodb({ mongo_client: mock_clientx });
+        M.save({ hello: "world", id: "531e096521b5c6670c5e63a3" }, {})
     });
 
 
     it( "uses the default dsn", function( done ) {
         var M = backbone.Model.extend({
             urlRoot: "/models",
-            sync: backsync.mongodb({ dsn: dsn })
+            sync: backsync.mongodb({ dsn: dsn, mongo_client: mock_client })
         });
 
         new M().save({ hello: "world" }, {
             success: function( m ) {
                 assert( m.get( "hello" ), "world" );
-                collection.find({}).toArray(function( err, docs ) {
+                var collection = mock_client._dbs[ dsn ].models;
+                collection.find().toArray(function( err, docs ) {
+                    // console.log( docs )
                     assert.equal( docs.length, 1 );
                     assert.equal( docs[ 0 ]._id, m.id );
                     assert.equal( docs[ 0 ].hello, "world" );
@@ -360,25 +420,25 @@ describe( "backsync.mongodb", function() {
 
 
     it( "generates md5 of uuid", function( done ) {
-        connect = mongodb.MongoClient.connect
-        mongodb.MongoClient.connect = function( dsn, cb ) {
-            mongodb.MongoClient.connect = connect
-            cb( null, {
-                collection: function( name ) {
-                    return {
-                        insert: function( doc ) {
-                            assert.equal( typeof doc._id, "string" );
-                            assert.equal( doc._id.length, 32 );
-                            assert( !doc.id );
-                            done();
+        var mock_clientx = {
+            connect: function( dsn, cb ) {
+                cb( null, {
+                    collection: function( name ) {
+                        return {
+                            insert: function( doc ) {
+                                assert.equal( typeof doc._id, "string" );
+                                assert.equal( doc._id.length, 32 );
+                                assert( !doc.id );
+                                done();
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
         }
 
         var m = new Model();
-        m.sync = backsync.mongodb({ use_uuid: true });
+        m.sync = backsync.mongodb({ use_uuid: true, mongo_client: mock_clientx });
         m.save({ hello: "world" }, {})
     });
 
