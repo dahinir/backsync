@@ -1,8 +1,8 @@
 {
     "name": "backsync",
-    "version": "0.0.20",
+    "version": "0.0.22",
     "description": "A minimalistic library for integrating Backbone models with different data stores. Mongodb and Memory already included.",
-    "keywords": [ "backbone", "sync", "polystore", "orm", "mongodb", "memory", "database" ],
+    "keywords": [ "backbone", "sync", "polystore", "orm", "mongodb", "couchdb", "memory", "database" ],
     "author": "Roi Avinoam <avinoamr@gmail.com>",
     "repository": {
         "type": "git",
@@ -15,6 +15,7 @@
         "sift": "0.0.x"
     },
     "devDependencies": {
+        "backbone": "*",
         "mocha": "~1.14.0",
         "async": "*"
     },
