@@ -343,7 +343,7 @@ describe( "backsync.mongodb", function() {
     });
 
     it( "generates the correct dsn", function( done ) {
-        var mock_clientx = {
+        var mock_client = {
             connect: function( dsn, cb ) {
                 comps = dsn.split( "/" )
 
@@ -364,7 +364,7 @@ describe( "backsync.mongodb", function() {
         };
 
         var M = new Model();
-        M.sync = backsync.mongodb({ mongo_client: mock_clientx })
+        M.sync = backsync.mongodb({ mongo_client: mock_client })
         M.save({ hello: "world" }, {
             url: "mongodb://127.0.0.1:27017/test_backsyncx/one/two/three"
         })
@@ -372,7 +372,7 @@ describe( "backsync.mongodb", function() {
 
 
     it( "converts id to ObjectID", function( done ) {
-        var mock_clientx = {
+        var mock_client = {
             connect: function( dsn, cb ) {
                 cb( null, {
                     collection: function( name ) {
@@ -391,7 +391,7 @@ describe( "backsync.mongodb", function() {
         };
 
         var M = new Model();
-        M.sync = backsync.mongodb({ mongo_client: mock_clientx });
+        M.sync = backsync.mongodb({ mongo_client: mock_client });
         M.save({ hello: "world", id: "531e096521b5c6670c5e63a3" }, {})
     });
 
@@ -420,7 +420,7 @@ describe( "backsync.mongodb", function() {
 
 
     it( "generates md5 of uuid", function( done ) {
-        var mock_clientx = {
+        var mock_client = {
             connect: function( dsn, cb ) {
                 cb( null, {
                     collection: function( name ) {
@@ -438,7 +438,7 @@ describe( "backsync.mongodb", function() {
         }
 
         var m = new Model();
-        m.sync = backsync.mongodb({ use_uuid: true, mongo_client: mock_clientx });
+        m.sync = backsync.mongodb({ use_uuid: true, mongo_client: mock_client });
         m.save({ hello: "world" }, {})
     });
 
