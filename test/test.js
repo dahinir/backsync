@@ -185,7 +185,7 @@ describe( "backsync.couchdb", function() {
     var mock_request = function( opts, cb ) {
         var _url = url.parse( opts.url );
         var qs = querystring.parse( _url.query )
-        _url = _url.pathname;
+        _url = _url.host + _url.pathname;
 
         var res = null;
         if ( opts.method == "PUT" ) {
@@ -246,6 +246,24 @@ describe( "backsync.couchdb", function() {
 
     it( "implements the collection search", function( done ) {
         test_collection( Collection, done );
+    });
+
+
+    it( "uses the default dsn", function( done ) {
+        var dsn = "http://127.0.0.2:5984/test_backsyncx";
+        var M = backbone.Model.extend({
+            urlRoot: "/models",
+            sync: backsync.couchdb({ create_db: true, request: mock_request, dsn: dsn })
+        });
+
+        new M().save({ hello: "world" }, {
+            success: function( m ) {
+                var doc = d[ "127.0.0.2:5984/test_backsyncx/models/" + m.id ]
+                assert( doc.doc[ "hello" ], "world" );
+                done();
+            }
+        });
+
     });
 
 });
