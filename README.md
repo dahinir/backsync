@@ -1,7 +1,7 @@
 backsync
 ========
 
-A *minimalistic* library for integrating Backbone models with different data stores. Mongodb and Memory already included.
+A *minimalistic* library for integrating Backbone models with different data stores. Mongodb, Couchdb and Memory already included.
 
 # Installation
 
@@ -46,6 +46,6 @@ new TodoCollection()
 
 ### Building your own backend
 
-In order to create your own data stores for Backbone, implement the following methods: `create` (alias: `insert`), `update`, `read`, `delete` (alias: `remove`) and `search` (alias: `list`). Each of these functions receive the model, options object and a callback to call with the updated resource attributes. 
+In order to create your own data stores for Backbone, implement the following methods: `create` (alias: `insert`), `update`, `read`, `delete` (alias: `remove`) and `search` (alias: `list`). Each of these functions receive the model, options object and a callback to call with the updated resource attributes.
 
 See the implementation of the memory or mongo sync methods to learn more.
