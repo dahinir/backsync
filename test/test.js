@@ -258,7 +258,7 @@ describe( "backsync.couchdb", function() {
 
         new M().save({ hello: "world" }, {
             success: function( m ) {
-                var doc = d[ "127.0.0.2:5984/test_backsyncx/models/" + m.id ]
+                var doc = d[ "127.0.0.2:5984/test_backsyncx_models/" + m.id ]
                 assert( doc.doc[ "hello" ], "world" );
                 done();
             }
