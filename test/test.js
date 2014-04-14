@@ -90,7 +90,7 @@ var test_model = function( Model, done ) {
             });
         },
         function( m, cb ) { // delete
-            m.destroy({
+            new Model({ id: m.id }).destroy({
                 success: function( m ) { cb( null, m ); }
             });
         },
@@ -220,6 +220,8 @@ describe( "backsync.couchdb", function() {
         } else if ( opts.method == "DELETE" ) {
             if ( !d[ _url ] ) {
                 res = { error: "not_found" };
+            } else if ( d[ _url ].rev != qs.rev ) {
+                res = { error: "conflict" };
             } else {
                 delete d[ _url ];
                 res = { ok: "true" };
