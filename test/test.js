@@ -67,8 +67,9 @@ var test_model = function( Model, done ) {
             });
         },
         function( m, cb ) { // update
-            m.save( { foo: "bar" }, {
-                success: function( m ) { cb( null, m ) }
+            new Model({ id: m.id }).save( { foo: "bar" }, {
+                success: function( m ) { cb( null, m ) },
+                error: function( m, err ) { console.log( err )}
             });
         },
         function( m, cb ) { // patch
@@ -81,8 +82,8 @@ var test_model = function( Model, done ) {
             new Model({ id: m.id }).fetch({
                 success: function( m ) {
                     assert( m.id );
+                    assert( !m.get( "hello" ) ); // removed by update
                     assert.equal( typeof m._id, "undefined" );
-                    assert.equal( m.get( "hello" ), "world" );
                     assert.equal( m.get( "foo" ), "bar" );
                     assert.equal( m.get( "alice" ), "bob" );
                     cb( null, m )
