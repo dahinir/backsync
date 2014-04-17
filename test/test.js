@@ -335,7 +335,7 @@ describe( "backsync.couchdb", function() {
                 assert.equal( res.total, data.length );
                 assert.equal( res.offset, 1 );
                 assert.equal( res.count, 5 );
-                assert.equal( res.last_id, "6" );
+                assert.equal( res.last_id, "5" );
                 assert.deepEqual( res.results, [
                     { color: "blue", id: "2", rev: 5 },
                     { color: "blue", id: "4", rev: 5 },
