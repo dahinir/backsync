@@ -293,6 +293,60 @@ describe( "backsync.couchdb", function() {
     });
 
 
+    it( "returns additional information", function( done ) {
+        var C = backbone.Collection.extend({
+            model: Model,
+            url: "http://127.0.0.1:5984/test_backsyncx",
+            sync: backsync.couchdb({
+                request: function( opts, cb ) {
+                    var qs = querystring.parse( url.parse( opts.url ).query );
+                    var body = {
+                        total_rows: data.length,
+                        offset: 0,
+                        rows: []
+                    };
+                    for ( var i = 0 ; i < data.length ; i += 1 ) {
+                        var d = data[ i ];
+                        if ( d._id < qs.startkey ) {
+                            body.offset += 1;
+                        } else if ( d._id <= qs.endkey ) {
+                            body.rows.push({  doc: d, id: d._id, value: { rev: 5 } } );
+                        } else {
+                            break
+                        }
+                    }
+                    cb( null, null, JSON.stringify( body ) );
+                }
+            })
+        });
+
+        var data = [
+            { _id: "1", color: "red" }, { _id: "2", color: "blue" },
+            { _id: "3", color: "red" }, { _id: "4", color: "blue" },
+            { _id: "5", color: "blue" }, { _id: "6", color: "blue" },
+            { _id: "7", color: "red" }, { _id: "8", color: "blue" },
+        ];
+
+        var c = new C();
+        c.sync( "read", c, {
+            data: { id: { $gte: 2, $lte: 6 }, color: "blue", $limit: 3 },
+            info: true,
+            success: function( res ) {
+                assert.equal( res.total, data.length );
+                assert.equal( res.offset, 1 );
+                assert.equal( res.count, 5 );
+                assert.equal( res.last_id, "6" );
+                assert.deepEqual( res.results, [
+                    { color: "blue", id: "2", rev: 5 },
+                    { color: "blue", id: "4", rev: 5 },
+                    { color: "blue", id: "5", rev: 5 },
+                ]);
+                done()
+            },
+        });
+    });
+
+
     it( "uses the default dsn", function( done ) {
         var dsn = "http://127.0.0.2:5984/test_backsyncx";
         var M = backbone.Model.extend({
