@@ -243,12 +243,35 @@ describe( "backsync.couchdb", function() {
         sync: Model.prototype.sync
     });
 
+
     it( "implements the model CRUD API", function( done ) {
         test_model( Model, done )
     });
 
+
     it( "implements the collection search", function( done ) {
         test_collection( Collection, done );
+    });
+
+
+    it( "transform id-filters to start- and end-key", function( done ) {
+        var C = backbone.Collection.extend({
+            model: Model,
+            url: "http://127.0.0.1:5984/test_backsyncx",
+            sync: backsync.couchdb({
+                request: function( opts, cb ) {
+                    var qs = querystring.parse( url.parse( opts.url ).query );
+                    assert.equal( qs.startkey, '"ab"' )
+                    assert.equal( qs.endkey, '"ac"' )
+                    assert.equal( qs.inclusive_end, "false" );
+                    done();
+                }
+            })
+        });
+
+        new C().fetch({
+            data: { id: { $gt: "ab", $lt: "ac" } }
+        });
     });
 
 
