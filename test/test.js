@@ -200,26 +200,42 @@ describe( "backsync.memory", function() {
 
 describe( "backsync.couchdb", function() {
 
-    var d = {};
+    var data = {};
     var mock_request = function( opts, cb ) {
         var _url = url.parse( opts.url );
         var qs = querystring.parse( _url.query )
-        _url = _url.host + _url.pathname;
+        var db = _url.pathname.split( "/" )[ 1 ];
+        var id = _url.pathname.split( "/" )[ 2 ];
+        // _url = _url.host + _url.pathname;
 
+        data[ _url.host ] || ( data[ _url.host ] = {} );
+        data[ _url.host ][ db ] || ( data[ _url.host ][ db ] = {} );
+        var d = data[ _url.host ][ db ];
         var res = null;
         if ( opts.method == "PUT" ) {
-            if ( d[ _url ] && d[ _url ].rev != qs.rev ) {
+            if ( d[ id ] && d[ id ].rev != qs.rev ) {
                 res = { "error": "conflict" }
             } else {
-                d[ _url ] = {
+                d[ id ] = {
                     doc: JSON.parse( opts.body ),
                     rev: md5( uuid.v4() ),
-                    id: _url.split( "/" ).pop()
+                    id: id.split( "/" ).pop()
                 };
-                res = { ok: "true", id: d[ _url ].id, rev: d[ _url ].rev };
+                res = { ok: "true", id: d[ id ].id, rev: d[ id ].rev };
             }
         } else if ( opts.method == "GET" || !opts.method ) {
-            if ( _url.indexOf( "_all_docs" ) != -1 ) {
+            if ( id == "_all_docs" ) {
+                res = {
+                    total_rows: d.length,
+                    offset: 0,
+                    rows: [],
+                };
+
+                for ( var i = 0 ; i < d.length ; i += 1 ) {
+
+                }
+
+
                 res = {
                     rows: _.map( d, function( v ) {
                         v = _.clone( v );
@@ -229,20 +245,20 @@ describe( "backsync.couchdb", function() {
                         return v
                     })
                 }
-            } else if ( !d[ _url ] ) {
+            } else if ( !d[ id ] ) {
                 res = { error: "not_found" };
             } else {
-                res = _.clone( d[ _url ].doc );
-                res._rev = d[ _url ].rev;
-                res._id = d[ _url ].id;
+                res = _.clone( d[ id ].doc );
+                res._rev = d[ id ].rev;
+                res._id = d[ id ].id;
             }
         } else if ( opts.method == "DELETE" ) {
-            if ( !d[ _url ] ) {
+            if ( !d[ id ] ) {
                 res = { error: "not_found" };
-            } else if ( d[ _url ].rev != qs.rev ) {
+            } else if ( d[ id ].rev != qs.rev ) {
                 res = { error: "conflict" };
             } else {
-                delete d[ _url ];
+                delete d[ id ];
                 res = { ok: "true" };
             }
         }
@@ -291,6 +307,44 @@ describe( "backsync.couchdb", function() {
             data: { id: { $gt: "ab", $lt: "ac" } }
         });
     });
+
+
+    it( "applies the limit, skip and sort", function( done ) {
+        var C = backbone.Collection.extend({
+            model: Model,
+            url: "http://127.0.0.1:5984/test_backsyncx",
+            sync: backsync.couchdb({
+                request: function( opts, cb ) {
+                    var qs = querystring.parse( url.parse( opts.url ).query );
+                    var body = {
+                        total_rows: data.length,
+                        offset: 0,
+                        rows: []
+                    };
+                    for ( var i = 0 ; i < data.length ; i += 1 ) {
+                        var d = data[ i ];
+                        if ( d._id < qs.startkey ) {
+                            body.offset += 1;
+                        } else if ( d._id <= qs.endkey ) {
+                            body.rows.push({  doc: d, id: d._id, value: { rev: 5 } } );
+                        } else {
+                            break
+                        }
+                    }
+                    cb( null, null, JSON.stringify( body ) );
+                }
+            })
+        });
+        var data = [
+            { _id: "1", color: "red" }, { _id: "2", color: "blue" },
+            { _id: "3", color: "red" }, { _id: "4", color: "blue" },
+            { _id: "5", color: "blue" }, { _id: "6", color: "blue" },
+            { _id: "7", color: "red" }, { _id: "8", color: "blue" },
+        ];
+
+
+        done()
+    })
 
 
     it( "returns additional information", function( done ) {
@@ -356,7 +410,7 @@ describe( "backsync.couchdb", function() {
 
         new M().save({ hello: "world" }, {
             success: function( m ) {
-                var doc = d[ "127.0.0.2:5984/test_backsyncx_models/" + m.id ]
+                var doc = data[ "127.0.0.2:5984" ][ "test_backsyncx_models" ][ m.id ];
                 assert( doc.doc[ "hello" ], "world" );
                 done();
             }
