@@ -43,20 +43,38 @@ var test_collection = function( Collection, done ) {
         }
     })
 
-    async.series( save_multi, function( err, models ) {
-        new Collection().fetch({
-            data: {
-                color: "blue",
-                $sort: "age",
-                $skip: 1,
-                $limit: 2
-            }, success: function( c ) {
-                var ages = c.map( function( m ) { return m.get( "age" ) });
-                assert.deepEqual( ages, [ 15, 30 ] );
-                done();
-            }
-        })
-    });
+    async.series([
+        function( cb ) { // save the documents
+            async.series( save_multi, cb )
+        },
+
+        function( cb ) { // search with filters, sort, skip and limit
+            new Collection().fetch({
+                data: {
+                    color: "blue",
+                    $sort: "age",
+                    $skip: 1,
+                    $limit: 2
+                }, success: function( c ) {
+                    var ages = c.map( function( m ) { return m.get( "age" ) });
+                    assert.deepEqual( ages, [ 15, 30 ] );
+                    cb()
+                }
+            })
+        },
+
+        function( cb ) { // only filter, maintains native order
+            new Collection().fetch({
+                data: {
+                    color: "blue",
+                }, success: function( c ) {
+                    var ages = c.map( function( m ) { return m.get( "age" ) });
+                    assert.deepEqual( ages, [ 30, 15, 49, 7 ] );
+                    cb()
+                }
+            })
+        }
+    ], done );
 };
 
 var test_model = function( Model, done ) {
@@ -339,7 +357,7 @@ describe( "backsync.mongodb", function() {
                     limit: function( l ) { limit = l },
                     skip: function( s ) { skip = s },
                     toArray: function( cb ) {
-                        var res = sift( spec, _.values( _data ) );
+                        var res = sift( spec, _.values( _data ) ).reverse();
                         if ( sort ) { res = _.sortBy( res, sort ) }
                         if ( skip ) { res.splice( 0, skip ) }
                         if ( limit ) { res.splice( limit ) }
