@@ -336,7 +336,9 @@ describe( "backsync.couchdb", function() {
             "8": { doc: { _id: "8", color: "blue" }, id: "8", rev: 5 },
         };
 
+        var info;
         var c = new C();
+        c.on( "request", function( c, _info ) { info = _info });
         c.sync( "read", c, {
             data: {
                 id: { $gte: 2, $lte: 7 },
@@ -345,14 +347,12 @@ describe( "backsync.couchdb", function() {
                 $sort: "rev",
                 $skip: 1
             },
-            querystring: { limit: 3 },
-            info: true,
+            backsync: { couchdb: { request_limit: 3 } },
             success: function( res ) {
-                assert.equal( res.total, 8 );
-                assert.equal( res.offset, 1 );
-                assert.equal( res.scanned, 6 );
-                assert.equal( res.requests, 4 );
-                assert.deepEqual( res.results, [
+                assert.equal( info.body.total_rows, 8 );
+                assert.equal( info.scanned, 6 );
+                assert.equal( info.requests, 4 );
+                assert.deepEqual( res, [
                     { color: "blue", id: "4", rev: 2 },
                     { color: "blue", id: "5", rev: 2 },
                     { color: "blue", id: "2", rev: 5 },
