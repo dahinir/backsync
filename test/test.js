@@ -206,7 +206,6 @@ describe( "backsync.couchdb", function() {
         var qs = querystring.parse( _url.query )
         var db = _url.pathname.split( "/" )[ 1 ];
         var id = _url.pathname.split( "/" )[ 2 ];
-        // _url = _url.host + _url.pathname;
 
         data[ _url.host ] || ( data[ _url.host ] = {} );
         data[ _url.host ][ db ] || ( data[ _url.host ][ db ] = {} );
@@ -225,6 +224,7 @@ describe( "backsync.couchdb", function() {
             }
         } else if ( opts.method == "GET" || !opts.method ) {
             if ( id == "_all_docs" ) {
+                if ( qs.limit ) qs.limit = +qs.limit;
                 res = {
                     total_rows: d.length,
                     offset: 0,
@@ -238,7 +238,7 @@ describe( "backsync.couchdb", function() {
                         res.offset += 1;
                     } else if ( qs.endkey && doc.id > qs.endkey ) {
                         break;
-                    } else if ( qs.limit && res.rows.length > qs.limit ) {
+                    } else if ( qs.limit && res.rows.length >= qs.limit ) {
                         break;
                     } else {
                         var row = _.clone( doc )
@@ -315,38 +315,43 @@ describe( "backsync.couchdb", function() {
 
 
     // it( "applies the limit, skip and sort", function( done ) {
+    //     var host = "127.0.0.1:5984";
+    //     var db = "test_backsyncx_modifiers";
     //     var C = backbone.Collection.extend({
     //         model: Model,
-    //         url: "http://127.0.0.1:5984/test_backsyncx",
-    //         sync: backsync.couchdb({
-    //             request: function( opts, cb ) {
-    //                 var qs = querystring.parse( url.parse( opts.url ).query );
-    //                 var body = {
-    //                     total_rows: data.length,
-    //                     offset: 0,
-    //                     rows: []
-    //                 };
-    //                 for ( var i = 0 ; i < data.length ; i += 1 ) {
-    //                     var d = data[ i ];
-    //                     if ( d._id < qs.startkey ) {
-    //                         body.offset += 1;
-    //                     } else if ( d._id <= qs.endkey ) {
-    //                         body.rows.push({  doc: d, id: d._id, value: { rev: 5 } } );
-    //                     } else {
-    //                         break
-    //                     }
-    //                 }
-    //                 cb( null, null, JSON.stringify( body ) );
-    //             }
-    //         })
+    //         url: "http://" + host + "/" + db,
+    //         sync: backsync.couchdb({ request: mock_request })
     //     });
-    //     var data = [
-    //         { _id: "1", color: "red" }, { _id: "2", color: "blue" },
-    //         { _id: "3", color: "red" }, { _id: "4", color: "blue" },
-    //         { _id: "5", color: "blue" }, { _id: "6", color: "blue" },
-    //         { _id: "7", color: "red" }, { _id: "8", color: "blue" },
-    //     ];
 
+    //     data[ host ] || ( data[ host ] = {} );
+    //     data[ host ][ db ] = {
+    //         "1": { doc: { _id: "1", color: "red" }, id: "1", rev: 5 },
+    //         "2": { doc: { _id: "2", color: "blue" }, id: "2", rev: 5 },
+    //         "3": { doc: { _id: "3", color: "red" }, id: "3", rev: 5 },
+    //         "4": { doc: { _id: "4", color: "blue" }, id: "4", rev: 5 },
+    //         "5": { doc: { _id: "5", color: "blue" }, id: "5", rev: 5 },
+    //         "6": { doc: { _id: "6", color: "blue" }, id: "6", rev: 5 },
+    //         "7": { doc: { _id: "7", color: "red" }, id: "7", rev: 5 },
+    //         "8": { doc: { _id: "8", color: "blue" }, id: "8", rev: 5 },
+    //     };
+
+    //     var c = new C();
+    //     c.sync( "read", c, {
+    //         data: { id: { $gte: 2, $lte: 6 }, color: "blue", $limit: 3 },
+    //         info: true,
+    //         success: function( res ) {
+    //             assert.equal( res.total, data.length );
+    //             assert.equal( res.offset, 1 );
+    //             assert.equal( res.count, 5 );
+    //             assert.equal( res.last_id, "5" );
+    //             assert.deepEqual( res.results, [
+    //                 { color: "blue", id: "2", rev: 5 },
+    //                 { color: "blue", id: "4", rev: 5 },
+    //                 { color: "blue", id: "5", rev: 5 },
+    //             ]);
+    //             done()
+    //         },
+    //     });
 
     //     done()
     // })
@@ -376,8 +381,10 @@ describe( "backsync.couchdb", function() {
         var c = new C();
         c.sync( "read", c, {
             data: { id: { $gte: 2, $lte: 6 }, color: "blue", $limit: 3 },
+            // querystring: { limit: 2 },
             info: true,
             success: function( res ) {
+                // console.log( res )
                 assert.equal( res.total, data.length );
                 assert.equal( res.offset, 1 );
                 assert.equal( res.count, 5 );
