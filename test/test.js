@@ -28,11 +28,11 @@ var modelsToObject = function( models ) {
 var test_collection = function( Collection, done ) {
     var Model = Collection.prototype.model;
     var data = [
-        { age: 30, color: "blue" },
-        { age: 2, color: "green" },
-        { age: 15, color: "blue" },
-        { age: 49, color: "blue" },
-        { age: 7, color: "blue" }
+        { age: 30, color: "blue", id: "1" },
+        { age: 2, color: "green", id: "2" },
+        { age: 15, color: "blue", id: "3" },
+        { age: 49, color: "blue", id: "4" },
+        { age: 7, color: "blue", id: "5" }
     ];
 
     var save_multi = data.map( function( datum ) {
@@ -231,19 +231,24 @@ describe( "backsync.couchdb", function() {
                     rows: [],
                 };
 
+                d = _.sortBy( _.values( d ), "id" );
                 for ( var i = 0 ; i < d.length ; i += 1 ) {
-
-                }
-
-
-                res = {
-                    rows: _.map( d, function( v ) {
-                        v = _.clone( v );
-                        v.value = { rev: v.rev };
-                        delete v.rev;
-                        if ( !qs.include_docs ) { delete v.doc }
-                        return v
-                    })
+                    var doc = d[ i ];
+                    if ( qs.startkey && doc.id < qs.startkey ) {
+                        res.offset += 1;
+                    } else if ( qs.endkey && doc.id > qs.endkey ) {
+                        break;
+                    } else if ( qs.limit && res.rows.length > qs.limit ) {
+                        break;
+                    } else {
+                        var row = _.clone( doc )
+                        row.doc._id = doc.id
+                        row.doc._rev = doc.rev;
+                        row.value = { rev: doc.rev };
+                        delete row.rev;
+                        if ( !qs.include_docs ) { delete row.doc }
+                        res.rows.push( row );
+                    }
                 }
             } else if ( !d[ id ] ) {
                 res = { error: "not_found" };
@@ -309,77 +314,64 @@ describe( "backsync.couchdb", function() {
     });
 
 
-    it( "applies the limit, skip and sort", function( done ) {
-        var C = backbone.Collection.extend({
-            model: Model,
-            url: "http://127.0.0.1:5984/test_backsyncx",
-            sync: backsync.couchdb({
-                request: function( opts, cb ) {
-                    var qs = querystring.parse( url.parse( opts.url ).query );
-                    var body = {
-                        total_rows: data.length,
-                        offset: 0,
-                        rows: []
-                    };
-                    for ( var i = 0 ; i < data.length ; i += 1 ) {
-                        var d = data[ i ];
-                        if ( d._id < qs.startkey ) {
-                            body.offset += 1;
-                        } else if ( d._id <= qs.endkey ) {
-                            body.rows.push({  doc: d, id: d._id, value: { rev: 5 } } );
-                        } else {
-                            break
-                        }
-                    }
-                    cb( null, null, JSON.stringify( body ) );
-                }
-            })
-        });
-        var data = [
-            { _id: "1", color: "red" }, { _id: "2", color: "blue" },
-            { _id: "3", color: "red" }, { _id: "4", color: "blue" },
-            { _id: "5", color: "blue" }, { _id: "6", color: "blue" },
-            { _id: "7", color: "red" }, { _id: "8", color: "blue" },
-        ];
+    // it( "applies the limit, skip and sort", function( done ) {
+    //     var C = backbone.Collection.extend({
+    //         model: Model,
+    //         url: "http://127.0.0.1:5984/test_backsyncx",
+    //         sync: backsync.couchdb({
+    //             request: function( opts, cb ) {
+    //                 var qs = querystring.parse( url.parse( opts.url ).query );
+    //                 var body = {
+    //                     total_rows: data.length,
+    //                     offset: 0,
+    //                     rows: []
+    //                 };
+    //                 for ( var i = 0 ; i < data.length ; i += 1 ) {
+    //                     var d = data[ i ];
+    //                     if ( d._id < qs.startkey ) {
+    //                         body.offset += 1;
+    //                     } else if ( d._id <= qs.endkey ) {
+    //                         body.rows.push({  doc: d, id: d._id, value: { rev: 5 } } );
+    //                     } else {
+    //                         break
+    //                     }
+    //                 }
+    //                 cb( null, null, JSON.stringify( body ) );
+    //             }
+    //         })
+    //     });
+    //     var data = [
+    //         { _id: "1", color: "red" }, { _id: "2", color: "blue" },
+    //         { _id: "3", color: "red" }, { _id: "4", color: "blue" },
+    //         { _id: "5", color: "blue" }, { _id: "6", color: "blue" },
+    //         { _id: "7", color: "red" }, { _id: "8", color: "blue" },
+    //     ];
 
 
-        done()
-    })
+    //     done()
+    // })
 
 
     it( "returns additional information", function( done ) {
+        var host = "127.0.0.1:5984";
+        var db = "test_backsyncx_info"
         var C = backbone.Collection.extend({
             model: Model,
-            url: "http://127.0.0.1:5984/test_backsyncx",
-            sync: backsync.couchdb({
-                request: function( opts, cb ) {
-                    var qs = querystring.parse( url.parse( opts.url ).query );
-                    var body = {
-                        total_rows: data.length,
-                        offset: 0,
-                        rows: []
-                    };
-                    for ( var i = 0 ; i < data.length ; i += 1 ) {
-                        var d = data[ i ];
-                        if ( d._id < qs.startkey ) {
-                            body.offset += 1;
-                        } else if ( d._id <= qs.endkey ) {
-                            body.rows.push({  doc: d, id: d._id, value: { rev: 5 } } );
-                        } else {
-                            break
-                        }
-                    }
-                    cb( null, null, JSON.stringify( body ) );
-                }
-            })
+            url: "http://" + host + "/" + db,
+            sync: backsync.couchdb({ request: mock_request })
         });
 
-        var data = [
-            { _id: "1", color: "red" }, { _id: "2", color: "blue" },
-            { _id: "3", color: "red" }, { _id: "4", color: "blue" },
-            { _id: "5", color: "blue" }, { _id: "6", color: "blue" },
-            { _id: "7", color: "red" }, { _id: "8", color: "blue" },
-        ];
+        data[ host ] || ( data[ host ] = {} );
+        data[ host ][ db ] = {
+            "1": { doc: { _id: "1", color: "red" }, id: "1", rev: 5 },
+            "2": { doc: { _id: "2", color: "blue" }, id: "2", rev: 5 },
+            "3": { doc: { _id: "3", color: "red" }, id: "3", rev: 5 },
+            "4": { doc: { _id: "4", color: "blue" }, id: "4", rev: 5 },
+            "5": { doc: { _id: "5", color: "blue" }, id: "5", rev: 5 },
+            "6": { doc: { _id: "6", color: "blue" }, id: "6", rev: 5 },
+            "7": { doc: { _id: "7", color: "red" }, id: "7", rev: 5 },
+            "8": { doc: { _id: "8", color: "blue" }, id: "8", rev: 5 },
+        };
 
         var c = new C();
         c.sync( "read", c, {
