@@ -225,6 +225,9 @@ describe( "backsync.couchdb", function() {
         } else if ( opts.method == "GET" || !opts.method ) {
             if ( id == "_all_docs" ) {
                 if ( qs.limit ) qs.limit = +qs.limit;
+                if ( qs.startkey ) qs.startkey = JSON.parse( qs.startkey );
+                if ( qs.endkey ) qs.endkey = JSON.parse( qs.endkey );
+
                 d = _.sortBy( _.values( d ), "id" );
                 res = {
                     total_rows: d.length,
@@ -287,9 +290,9 @@ describe( "backsync.couchdb", function() {
     });
 
 
-    // it( "implements the collection search", function( done ) {
-    //     test_collection( Collection, done );
-    // });
+    it( "implements the collection search", function( done ) {
+        test_collection( Collection, done );
+    });
 
 
     it( "transform id-filters to start- and end-key", function( done ) {
@@ -324,16 +327,16 @@ describe( "backsync.couchdb", function() {
 
         data[ host ] || ( data[ host ] = {} );
         data[ host ][ db ] = {
-            "1": { doc: { _id: "1", color: "red" }, id: "1", rev: 5 },
+            "a1": { doc: { _id: "a1", color: "red" }, id: "a1", rev: 5 },
 
-            "2": { doc: { _id: "2", color: "blue" }, id: "2", rev: 5 },
-            "3": { doc: { _id: "3", color: "red" }, id: "3", rev: 3 },
-            "4": { doc: { _id: "4", color: "blue" }, id: "4", rev: 2 },
-            "5": { doc: { _id: "5", color: "blue" }, id: "5", rev: 2 },
-            "6": { doc: { _id: "6", color: "blue" }, id: "6", rev: 1 },
+            "a2": { doc: { _id: "a2", color: "blue" }, id: "a2", rev: 5 },
+            "a3": { doc: { _id: "a3", color: "red" }, id: "a3", rev: 3 },
+            "a4": { doc: { _id: "a4", color: "blue" }, id: "a4", rev: 2 },
+            "b5": { doc: { _id: "b5", color: "blue" }, id: "b5", rev: 2 },
+            "b6": { doc: { _id: "b6", color: "blue" }, id: "b6", rev: 1 },
 
-            "7": { doc: { _id: "7", color: "red" }, id: "7", rev: 1 },
-            "8": { doc: { _id: "8", color: "blue" }, id: "8", rev: 5 },
+            "b7": { doc: { _id: "b7", color: "red" }, id: "b7", rev: 1 },
+            "b8": { doc: { _id: "b8", color: "blue" }, id: "b8", rev: 5 },
         };
 
         var info;
@@ -341,7 +344,7 @@ describe( "backsync.couchdb", function() {
         c.on( "request", function( c, _info ) { info = _info });
         c.sync( "read", c, {
             data: {
-                id: { $gte: 2, $lte: 7 },
+                id: { $gte: "a2", $lte: "b7" },
                 color: "blue",
                 $limit: 3,
                 $sort: "rev",
@@ -353,9 +356,9 @@ describe( "backsync.couchdb", function() {
                 assert.equal( info.scanned, 6 );
                 assert.equal( info.requests, 4 );
                 assert.deepEqual( res, [
-                    { color: "blue", id: "4", rev: 2 },
-                    { color: "blue", id: "5", rev: 2 },
-                    { color: "blue", id: "2", rev: 5 },
+                    { color: "blue", id: "a4", rev: 2 },
+                    { color: "blue", id: "b5", rev: 2 },
+                    { color: "blue", id: "a2", rev: 5 },
                 ]);
                 done()
             },
