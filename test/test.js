@@ -225,13 +225,12 @@ describe( "backsync.couchdb", function() {
         } else if ( opts.method == "GET" || !opts.method ) {
             if ( id == "_all_docs" ) {
                 if ( qs.limit ) qs.limit = +qs.limit;
+                d = _.sortBy( _.values( d ), "id" );
                 res = {
                     total_rows: d.length,
                     offset: 0,
                     rows: [],
                 };
-
-                d = _.sortBy( _.values( d ), "id" );
                 for ( var i = 0 ; i < d.length ; i += 1 ) {
                     var doc = d[ i ];
                     if ( qs.startkey && doc.id < qs.startkey ) {
@@ -288,9 +287,9 @@ describe( "backsync.couchdb", function() {
     });
 
 
-    it( "implements the collection search", function( done ) {
-        test_collection( Collection, done );
-    });
+    // it( "implements the collection search", function( done ) {
+    //     test_collection( Collection, done );
+    // });
 
 
     it( "transform id-filters to start- and end-key", function( done ) {
@@ -314,49 +313,6 @@ describe( "backsync.couchdb", function() {
     });
 
 
-    // it( "applies the limit, skip and sort", function( done ) {
-    //     var host = "127.0.0.1:5984";
-    //     var db = "test_backsyncx_modifiers";
-    //     var C = backbone.Collection.extend({
-    //         model: Model,
-    //         url: "http://" + host + "/" + db,
-    //         sync: backsync.couchdb({ request: mock_request })
-    //     });
-
-    //     data[ host ] || ( data[ host ] = {} );
-    //     data[ host ][ db ] = {
-    //         "1": { doc: { _id: "1", color: "red" }, id: "1", rev: 5 },
-    //         "2": { doc: { _id: "2", color: "blue" }, id: "2", rev: 5 },
-    //         "3": { doc: { _id: "3", color: "red" }, id: "3", rev: 5 },
-    //         "4": { doc: { _id: "4", color: "blue" }, id: "4", rev: 5 },
-    //         "5": { doc: { _id: "5", color: "blue" }, id: "5", rev: 5 },
-    //         "6": { doc: { _id: "6", color: "blue" }, id: "6", rev: 5 },
-    //         "7": { doc: { _id: "7", color: "red" }, id: "7", rev: 5 },
-    //         "8": { doc: { _id: "8", color: "blue" }, id: "8", rev: 5 },
-    //     };
-
-    //     var c = new C();
-    //     c.sync( "read", c, {
-    //         data: { id: { $gte: 2, $lte: 6 }, color: "blue", $limit: 3 },
-    //         info: true,
-    //         success: function( res ) {
-    //             assert.equal( res.total, data.length );
-    //             assert.equal( res.offset, 1 );
-    //             assert.equal( res.count, 5 );
-    //             assert.equal( res.last_id, "5" );
-    //             assert.deepEqual( res.results, [
-    //                 { color: "blue", id: "2", rev: 5 },
-    //                 { color: "blue", id: "4", rev: 5 },
-    //                 { color: "blue", id: "5", rev: 5 },
-    //             ]);
-    //             done()
-    //         },
-    //     });
-
-    //     done()
-    // })
-
-
     it( "returns additional information", function( done ) {
         var host = "127.0.0.1:5984";
         var db = "test_backsyncx_info"
@@ -369,30 +325,37 @@ describe( "backsync.couchdb", function() {
         data[ host ] || ( data[ host ] = {} );
         data[ host ][ db ] = {
             "1": { doc: { _id: "1", color: "red" }, id: "1", rev: 5 },
+
             "2": { doc: { _id: "2", color: "blue" }, id: "2", rev: 5 },
-            "3": { doc: { _id: "3", color: "red" }, id: "3", rev: 5 },
-            "4": { doc: { _id: "4", color: "blue" }, id: "4", rev: 5 },
-            "5": { doc: { _id: "5", color: "blue" }, id: "5", rev: 5 },
-            "6": { doc: { _id: "6", color: "blue" }, id: "6", rev: 5 },
-            "7": { doc: { _id: "7", color: "red" }, id: "7", rev: 5 },
+            "3": { doc: { _id: "3", color: "red" }, id: "3", rev: 3 },
+            "4": { doc: { _id: "4", color: "blue" }, id: "4", rev: 2 },
+            "5": { doc: { _id: "5", color: "blue" }, id: "5", rev: 2 },
+            "6": { doc: { _id: "6", color: "blue" }, id: "6", rev: 1 },
+
+            "7": { doc: { _id: "7", color: "red" }, id: "7", rev: 1 },
             "8": { doc: { _id: "8", color: "blue" }, id: "8", rev: 5 },
         };
 
         var c = new C();
         c.sync( "read", c, {
-            data: { id: { $gte: 2, $lte: 6 }, color: "blue", $limit: 3 },
-            // querystring: { limit: 2 },
+            data: {
+                id: { $gte: 2, $lte: 7 },
+                color: "blue",
+                $limit: 3,
+                $sort: "rev",
+                $skip: 1
+            },
+            querystring: { limit: 3 },
             info: true,
             success: function( res ) {
-                // console.log( res )
-                assert.equal( res.total, data.length );
+                assert.equal( res.total, 8 );
                 assert.equal( res.offset, 1 );
-                assert.equal( res.count, 5 );
-                assert.equal( res.last_id, "5" );
+                assert.equal( res.scanned, 6 );
+                assert.equal( res.requests, 4 );
                 assert.deepEqual( res.results, [
+                    { color: "blue", id: "4", rev: 2 },
+                    { color: "blue", id: "5", rev: 2 },
                     { color: "blue", id: "2", rev: 5 },
-                    { color: "blue", id: "4", rev: 5 },
-                    { color: "blue", id: "5", rev: 5 },
                 ]);
                 done()
             },
