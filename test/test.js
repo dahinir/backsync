@@ -277,9 +277,11 @@ describe( "backsync.couchdb", function() {
             }
         }
 
+        var r = {};
         process.nextTick(function() {
-            cb( null, {}, JSON.stringify( res ) )
+            cb.call( r, null, {}, JSON.stringify( res ) )
         });
+        return r;
     }
 
     var Model = backbone.Model.extend({
@@ -342,6 +344,7 @@ describe( "backsync.couchdb", function() {
                     assert.equal( qs.endkey, '"ac"' )
                     assert.equal( qs.inclusive_end, "false" );
                     done();
+                    return {};
                 }
             })
         });
@@ -352,7 +355,7 @@ describe( "backsync.couchdb", function() {
     });
 
 
-    it( "returns additional information", function( done ) {
+    it( "implements the sort, limit, skip and filters", function( done ) {
         var host = "127.0.0.1:5984";
         var db = "test_backsyncx_info"
         var C = backbone.Collection.extend({
@@ -375,9 +378,9 @@ describe( "backsync.couchdb", function() {
             "b8": { doc: { _id: "b8", color: "blue" }, id: "b8", rev: 5 },
         };
 
-        var info;
+        var req;
         var c = new C();
-        c.on( "request", function( c, _info ) { info = _info });
+        c.on( "request", function( c, _req ) { req = _req });
         c.sync( "read", c, {
             data: {
                 id: { $gte: "a2", $lte: "b7" },
@@ -388,9 +391,7 @@ describe( "backsync.couchdb", function() {
             },
             backsync: { couchdb: { request_limit: 3 } },
             success: function( res ) {
-                assert.equal( info.body.total_rows, 8 );
-                assert.equal( info.scanned, 6 );
-                assert.equal( info.requests, 4 );
+                assert.equal( req.body.total_rows, 8 );
                 assert.deepEqual( res, [
                     { color: "blue", id: "a4", rev: 2 },
                     { color: "blue", id: "b5", rev: 2 },
