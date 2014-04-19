@@ -56,7 +56,9 @@ var test_collection = function( Collection, done ) {
                     $skip: 1,
                     $limit: 2
                 }, success: function( c ) {
+                    var ids = c.map( function( m ) { return m.id } );
                     var ages = c.map( function( m ) { return m.get( "age" ) });
+                    assert( _.every( ids ) ); // all docs have an id
                     assert.deepEqual( ages, [ 15, 30 ] );
                     cb()
                 }
@@ -88,7 +90,7 @@ var test_model = function( Model, done ) {
         function( m, cb ) { // update
             new Model({ id: m.id }).save( { foo: "bar" }, {
                 success: function( m ) { cb( null, m ) },
-                error: function( m, err ) { console.log( err )}
+                error: function( m, err ) { cb( err ) }
             });
         },
         function( m, cb ) { // patch
@@ -98,10 +100,11 @@ var test_model = function( Model, done ) {
                 error: function( m, err ) { cb( err ) }
             });
         },
-        function( m, cb ) { // read
-            new Model({ id: m.id }).fetch({
+        function( _m, cb ) { // read
+            new Model({ id: _m.id }).fetch({
                 success: function( m ) {
                     assert( m.id );
+                    assert.equal( m.id, _m.id );
                     assert( !m.get( "hello" ) ); // removed by update
                     assert.equal( typeof m._id, "undefined" );
                     assert.equal( m.get( "foo" ), "bar" );
