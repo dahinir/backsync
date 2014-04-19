@@ -79,6 +79,47 @@ var test_collection = function( Collection, done ) {
     ], done );
 };
 
+var test_request = function( Model, Collection, done ) {
+    var listen = function( m, cb ) {
+        var called = false;
+        m.on( "request", function( _m, res, opts ) {
+            assert.equal( _m, m );
+            assert.equal( typeof res, "object" );
+            if ( !called ) {
+                called = true;
+                cb();
+            }
+        });
+        return m;
+    }
+
+    async.parallel([
+        function( cb ) { // create
+            listen( new Model(), cb )
+                .save({ hello: "world" } );
+        },
+        function( cb ) { // update
+            listen( new Model({ id: "one" }), cb )
+                .save({ hello: "world" });
+        },
+        function( cb ) { // patch
+            listen( new Model({ id: "one" }), cb )
+                .save({ hello: "world" }, { patch: true });
+        },
+        function( cb ) {
+            listen( new Model({ id: "one" }), cb ).fetch();
+        },
+        function( cb ) { // delete
+            listen( new Model({ id: "one" }), cb )
+                .destroy();
+        },
+        function( cb ) { // search
+            listen( new Collection(), cb ).fetch()
+        }
+
+    ], done )
+}
+
 var test_model = function( Model, done ) {
     async.waterfall([
         function( cb ) { // create
@@ -305,6 +346,10 @@ describe( "backsync.couchdb", function() {
         test_collection( Collection, done );
     });
 
+    it( "triggers a request event on every call", function( done ) {
+        test_request( Model, Collection, done );
+    });
+
     it( "doesn't save the id and rev on the object", function( done ) {
         async.waterfall([
             function( cb ) {
@@ -512,6 +557,10 @@ describe( "backsync.mongodb", function() {
 
     it( "implements the collection search", function( done ) {
         test_collection( Collection, done );
+    });
+
+    it( "triggers a request event on every call", function( done ) {
+        test_request( Model, Collection, done );
     });
 
     it( "generates the correct dsn", function( done ) {
