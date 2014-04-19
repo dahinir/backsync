@@ -243,6 +243,10 @@ describe( "backsync.memory", function() {
         test_collection( Collection, done );
     });
 
+    it( "triggers a request event on every call", function( done ) {
+        test_request( Model, Collection, done );
+    });
+
 });
 
 
