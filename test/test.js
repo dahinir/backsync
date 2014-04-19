@@ -81,7 +81,8 @@ var test_model = function( Model, done ) {
     async.waterfall([
         function( cb ) { // create
             new Model().save( { hello: "world" }, {
-                success: function( m ) { cb( null, m ) }
+                success: function( m ) { cb( null, m ) },
+                error: function( m, err ) { cb( err ) }
             });
         },
         function( m, cb ) { // update
@@ -93,7 +94,8 @@ var test_model = function( Model, done ) {
         function( m, cb ) { // patch
             new Model({ id: m.id }).save( { alice: "bob" }, {
                 patch: true,
-                success: function( m ) { cb( null, m ) }
+                success: function( m ) { cb( null, m ) },
+                error: function( m, err ) { cb( err ) }
             });
         },
         function( m, cb ) { // read
@@ -105,12 +107,14 @@ var test_model = function( Model, done ) {
                     assert.equal( m.get( "foo" ), "bar" );
                     assert.equal( m.get( "alice" ), "bob" );
                     cb( null, m )
-                }
+                },
+                error: function( m, err ) { cb( err ) }
             });
         },
         function( m, cb ) { // delete
             new Model({ id: m.id }).destroy({
-                success: function( m ) { cb( null, m ); }
+                success: function( m ) { cb( null, m ); },
+                error: function( m, err ) { cb( err ) }
             });
         },
         function( m, cb ) { // confirm it's deleted
@@ -270,7 +274,9 @@ describe( "backsync.couchdb", function() {
             }
         }
 
-        process.nextTick(function() { cb( null, {}, JSON.stringify( res ) ) });
+        process.nextTick(function() {
+            cb( null, {}, JSON.stringify( res ) )
+        });
     }
 
     var Model = backbone.Model.extend({
@@ -292,6 +298,33 @@ describe( "backsync.couchdb", function() {
 
     it( "implements the collection search", function( done ) {
         test_collection( Collection, done );
+    });
+
+    it( "doesn't save the id and rev on the object", function( done ) {
+        async.waterfall([
+            function( cb ) {
+                new Model({ id: "cookie", hello: "world" }).save( null, {
+                    error: function( m, err ) { cb( err ) },
+                    success: function( m ) { cb( null, m ) }
+                })
+            },
+
+            function( m, cb ) {
+                assert.equal( m.id, "cookie" );
+                assert( m.get( "rev" ) ); // rev was defined
+                new Model({ id: "cookie", rev: m.get( "rev" ) }).save( null, {
+                    error: function( m, err ) { cb( err ) },
+                    success: function( m ) {
+                        var db = data[ "127.0.0.1:5984" ][ "test_backsyncx" ];
+                        var r = db[ "cookie" ].doc;
+                        assert( !r[ "hello" ] ); // overwrite
+                        assert( !r[ "id" ] );
+                        assert( !r[ "rev" ] );
+                        cb();
+                    }
+                })
+            }
+        ], done );
     });
 
 

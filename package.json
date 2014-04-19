@@ -1,6 +1,6 @@
 {
     "name": "backsync",
-    "version": "0.1.8",
+    "version": "0.1.9",
     "description": "A minimalistic library for integrating Backbone models with different data stores. Mongodb and Memory already included.",
     "keywords": [ "backbone", "sync", "polystore", "orm", "mongodb", "couchdb", "memory", "database" ],
     "author": "Roi Avinoam <avinoamr@gmail.com>",
