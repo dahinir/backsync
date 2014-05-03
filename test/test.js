@@ -55,11 +55,17 @@ var test_collection = function( Collection, done ) {
                     $sort: "age",
                     $skip: 1,
                     $limit: 2
-                }, success: function( c ) {
+                }, success: function( c, req, opts ) {
                     var ids = c.map( function( m ) { return m.id } );
                     var ages = c.map( function( m ) { return m.get( "age" ) });
                     assert( _.every( ids ) ); // all docs have an id
                     assert.deepEqual( ages, [ 15, 30 ] );
+
+                    // verify that the method doesn't modify the original data
+                    assert.equal( opts.data.color, "blue" )
+                    assert.equal( opts.data.$sort, "age" )
+                    assert.equal( opts.data.$skip, 1 )
+                    assert.equal( opts.data.$limit, 2 )
                     cb()
                 }
             })
